@@ -68,6 +68,11 @@ async def plot_details():
     return Path("templates/plot_details.html").read_text()
 
 
+@app.get("/smart-tower", response_class=HTMLResponse)
+async def smart_tower():
+    return Path("templates/smart_tower.html").read_text()
+
+
 @app.get("/interior-layout", response_class=HTMLResponse)
 async def interior_layout():
     return Path("templates/interior_layout.html").read_text()

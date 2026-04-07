@@ -168,7 +168,7 @@
 
     // ── Floor selector ────────────────────────────────────────────────────────
     function buildFloorPicker(n) {
-      if (n <= 1) return; // no picker needed for single floor
+      if (n <= 1) { currentFloor = 1; return; } // no picker needed for single floor
       const container = document.getElementById('floor-btns');
       document.getElementById('floor-section').style.display = 'block';
       let html = `<button class="floor-btn active" data-floor="all">All</button>`;
@@ -191,10 +191,22 @@
 
     function applyFloorFilter() {
       const f = currentFloor;
-      const filter = f === 'all' ? null : ['==', ['get', 'floor'], f];
+      const isAll = (f === 'all');
+      const roomsExist = !!map.getLayer('rooms-extrusion');
+      
+      // Hide individual rooms completely if 'All' is selected, else show the specific floor's rooms.
+      const roomFilter = isAll ? ['==', 'floor', -1] : ['==', ['get', 'floor'], f];
+
       ['rooms-extrusion', 'rooms-fill', 'rooms-line'].forEach(id => {
-        if (map.getLayer(id)) map.setFilter(id, filter);
+        if (map.getLayer(id)) {
+          map.setFilter(id, roomFilter);
+        }
       });
+
+      // Make the building structural shell solid when rooms are hidden
+      if (map.getLayer('zones-extrusion')) {
+        map.setPaintProperty('zones-extrusion', 'fill-extrusion-opacity', isAll || !roomsExist ? 0.88 : 0.12);
+      }
     }
 
     // ── Room legend ───────────────────────────────────────────────────────────
@@ -394,6 +406,7 @@
             buildFloorPicker(interior.floors.length);
             buildLegend(interior);
             setupTooltip();
+            applyFloorFilter();
           }
 
           // ── Layer toggles ────────────────────────────────────────────────

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Smart City - Infrastructure Views</title>
+  <style>
+    body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #111; color: #fff; }
+    #ui-container { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(20, 20, 30, 0.85); padding: 15px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(5px); }
+    h1 { font-size: 1.2rem; margin: 0 0 10px 0; color: #60b4ff; }
+    .toggle-group { margin-bottom: 15px; }
+    .toggle-label { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.6); margin-bottom: 5px; display: block; }
+    button { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.9rem; margin-right: 5px; transition: all 0.2s; }
+    button.active { background: #60b4ff; border-color: #60b4ff; color: #000; font-weight: bold; }
+    button:hover:not(.active) { background: rgba(255,255,255,0.2); }
+    #back-btn { display: inline-block; margin-top: 10px; color: #aaa; text-decoration: none; font-size: 0.85rem; }
+    #back-btn:hover { color: #fff; }
+  </style>
+  <!-- Three.js from CDN -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="ui-container">
+    <h1>Smart Infrastructure</h1>
+    
+    <div class="toggle-group">
+      <span class="toggle-label">Camera View</span>
+      <button id="btn-perspective" class="active">Perspective</button>
+      <button id="btn-orthographic">Orthographic</button>
+    </div>
+
+    <div class="toggle-group">
+      <span class="toggle-label">Material / Mode</span>
+      <button id="btn-standard" class="active">Standard View</button>
+      <button id="btn-power">Power Grid View</button>
+    </div>
+
+    <a id="back-btn" href="/">&larr; Back to App</a>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // ─── Scene Setup ────────────────────────────────────────────────────────────
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0f18);
+    scene.fog = new THREE.Fog(0x0a0f18, 50, 300);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    // ─── Cameras ────────────────────────────────────────────────────────────────
+    const aspect = window.innerWidth / window.innerHeight;
+    const frustumSize = 80;
+
+    // Perspective Camera (human eye distance perspective)
+    const perspectiveCamera = new THREE.PerspectiveCamera(45, aspect, 1, 1000);
+    perspectiveCamera.position.set(70, 40, 150);
+
+    // Orthographic Camera (grid-based isometric standard)
+    const orthographicCamera = new THREE.OrthographicCamera(
+      frustumSize * aspect / -2, frustumSize * aspect / 2,
+      frustumSize / 2, frustumSize / -2,
+      1, 1000
+    );
+    orthographicCamera.position.set(70, 40, 150);
+
+    let currentCamera = perspectiveCamera;
+
+    // Controls
+    const controls = new OrbitControls(currentCamera, renderer.domElement);
+    controls.target.set(50, 0, 120); // Point roughly at the tower
+    controls.update();
+
+    // ─── Lighting & Environment ─────────────────────────────────────────────────
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(-50, 100, -50);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    dirLight.shadow.camera.near = 0.5;
+    dirLight.shadow.camera.far = 500;
+    dirLight.shadow.camera.left = -100;
+    dirLight.shadow.camera.right = 100;
+    dirLight.shadow.camera.top = 100;
+    dirLight.shadow.camera.bottom = -100;
+    scene.add(dirLight);
+
+    // Ground Plane
+    const groundGeo = new THREE.PlaneGeometry(500, 500);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a2233, roughness: 0.8 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Grid System
+    const gridHelper = new THREE.GridHelper(500, 50, 0x334455, 0x223344);
+    gridHelper.position.y = 0.1; // Slightly above ground to prevent z-fighting
+    scene.add(gridHelper);
+
+    // ─── Smart Tower (Provided Core Code) ───────────────────────────────────────
+    
+    // 1. Define the Shape (Geometry)
+    // e.g., a tower that is 2 units wide, 8 units high, and 2 units deep
+    const towerGeometry = new THREE.BoxGeometry(2, 8, 2);
+
+    // 2. Define the Look (Material)
+    const standardMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x2e86de, // A nice infrastructure blue
+        roughness: 0.4,  // Slightly glossy
+        metalness: 0.1
+    });
+
+    // Custom "Power Grid" transparent material
+    const powerGridMaterial = new THREE.MeshStandardMaterial({
+        color: 0x112244,
+        transparent: true,
+        opacity: 0.4,
+        roughness: 0.2,
+        metalness: 0.8
+    });
+
+    // 3. Combine into a Mesh
+    const smartTower = new THREE.Mesh(towerGeometry, standardMaterial);
+
+    // 4. Position on the Grid
+    const gridSize = 10;
+    const gridX = 5;
+    const gridZ = 12;
+
+    // Raised by half its height (8/2 = 4) to sit on ground
+    smartTower.position.set(gridX * gridSize, 4, gridZ * gridSize);
+    smartTower.castShadow = true;
+    smartTower.receiveShadow = true;
+
+    // Glowing Power lines (Only shown in Power Grid mode)
+    const edgesGeo = new THREE.EdgesGeometry(towerGeometry);
+    const edgesMat = new THREE.LineBasicMaterial({ color: 0x00ffcc, linewidth: 2 });
+    const wireframe = new THREE.LineSegments(edgesGeo, edgesMat);
+    wireframe.visible = false; // Hidden by default in Standard View
+    smartTower.add(wireframe);
+
+    // Render connection lines across the grid to simulate energy routing
+    const pathPoints = [
+      new THREE.Vector3(50, 0.2, 50),
+      new THREE.Vector3(50, 0.2, 120),
+      new THREE.Vector3(50, 4,   120) // go up the tower
+    ];
+    const pathGeo = new THREE.BufferGeometry().setFromPoints(pathPoints);
+    const pathMat = new THREE.LineBasicMaterial({ color: 0x00ffcc, linewidth: 3 });
+    const energyPath = new THREE.Line(pathGeo, pathMat);
+    energyPath.visible = false;
+    scene.add(energyPath);
+
+    // Add glowing source box representing a substation
+    const subGeo = new THREE.BoxGeometry(4, 2, 4);
+    const subMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc, emissive: 0x005544 });
+    const substation = new THREE.Mesh(subGeo, subMat);
+    substation.position.set(50, 1, 50);
+    substation.castShadow = true;
+    substation.receiveShadow = true;
+    substation.visible = false;
+    scene.add(substation);
+
+    // 5. Add to the 3D Scene
+    scene.add(smartTower);
+
+
+    // ─── Context Scenery ────────────────────────────────────────────────────────
+    // Add some generic background buildings to provide perspective and context
+    const bgBuildings = new THREE.Group();
+    const bgMat = new THREE.MeshStandardMaterial({ color: 0x223344, roughness: 0.7 });
+    
+    const positions = [ [2,10], [3,14], [7,11], [8,13], [6,8], [3,8] ];
+    positions.forEach(pos => {
+      const h = Math.random() * 15 + 5;
+      const bGeo = new THREE.BoxGeometry(4, h, 4);
+      const b = new THREE.Mesh(bGeo, bgMat);
+      b.position.set(pos[0] * gridSize, h/2, pos[1] * gridSize);
+      b.castShadow = true;
+      b.receiveShadow = true;
+      bgBuildings.add(b);
+    });
+    scene.add(bgBuildings);
+
+
+    // ─── UI Interactions ────────────────────────────────────────────────────────
+    
+    // Camera toggles
+    const btnPersp = document.getElementById('btn-perspective');
+    const btnOrtho = document.getElementById('btn-orthographic');
+
+    function switchCamera(type) {
+      if (type === 'perspective') {
+        currentCamera = perspectiveCamera;
+        btnPersp.classList.add('active');
+        btnOrtho.classList.remove('active');
+      } else {
+        // Sync position and target before switching
+        orthographicCamera.position.copy(perspectiveCamera.position);
+        orthographicCamera.rotation.copy(perspectiveCamera.rotation);
+        
+        currentCamera = orthographicCamera;
+        btnOrtho.classList.add('active');
+        btnPersp.classList.remove('active');
+      }
+      
+      // Re-bind controls to the new camera
+      controls.object = currentCamera;
+      controls.update();
+    }
+
+    btnPersp.addEventListener('click', () => switchCamera('perspective'));
+    btnOrtho.addEventListener('click', () => switchCamera('orthographic'));
+
+    // Mode toggles
+    const btnStandard = document.getElementById('btn-standard');
+    const btnPower = document.getElementById('btn-power');
+
+    function switchMode(mode) {
+      if (mode === 'standard') {
+        smartTower.material = standardMaterial;
+        wireframe.visible = false;
+        energyPath.visible = false;
+        substation.visible = false;
+        
+        // Return context buildings to normal
+        bgBuildings.children.forEach(b => {
+          b.material = bgMat;
+        });
+
+        btnStandard.classList.add('active');
+        btnPower.classList.remove('active');
+      } else {
+        smartTower.material = powerGridMaterial;
+        wireframe.visible = true;
+        energyPath.visible = true;
+        substation.visible = true;
+
+        // Turn context buildings into ghost structures to emphasize the data lines
+        const ghostMat = new THREE.MeshStandardMaterial({
+          color: 0x111122, transparent: true, opacity: 0.1, depthWrite: false
+        });
+        bgBuildings.children.forEach(b => {
+          b.material = ghostMat;
+        });
+
+        btnPower.classList.add('active');
+        btnStandard.classList.remove('active');
+      }
+    }
+
+    btnStandard.addEventListener('click', () => switchMode('standard'));
+    btnPower.addEventListener('click', () => switchMode('power'));
+
+
+    // ─── Animation Loop ─────────────────────────────────────────────────────────
+    window.addEventListener('resize', onWindowResize);
+
+    function onWindowResize() {
+      const aspect = window.innerWidth / window.innerHeight;
+      
+      perspectiveCamera.aspect = aspect;
+      perspectiveCamera.updateProjectionMatrix();
+
+      orthographicCamera.left = -frustumSize * aspect / 2;
+      orthographicCamera.right = frustumSize * aspect / 2;
+      orthographicCamera.top = frustumSize / 2;
+      orthographicCamera.bottom = -frustumSize / 2;
+      orthographicCamera.updateProjectionMatrix();
+
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // Glow pulse animation state
+    let pulseTime = 0;
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Animate the flow lines if in power layout
+      if (energyPath.visible) {
+         pulseTime += 0.05;
+         substation.material.emissiveIntensity = 0.5 + Math.sin(pulseTime) * 0.5;
+         edgesMat.color.setHSL(0.45, 1, 0.5 + Math.sin(pulseTime)*0.3);
+      }
+
+      controls.update();
+      renderer.render(scene, currentCamera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
