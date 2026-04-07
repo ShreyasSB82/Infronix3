@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>LandMark — Interactive Land Selection</title>
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<!-- Leaflet Draw -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+
+<style>
+/* ─── Reset ─────────────────────────────────────────────────── */
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden;background:#000;color:#fff}
+
+/* ─── Earth View ─────────────────────────────────────────────── */
+#earth-view{
+  position:fixed;inset:0;z-index:20;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  transition:opacity .9s ease,transform .9s ease;
+}
+#earth-view.exit{opacity:0;transform:scale(1.6);pointer-events:none}
+#three-canvas{position:absolute;inset:0;cursor:pointer}
+
+.hero{position:relative;z-index:2;text-align:center;pointer-events:none}
+.hero h1{
+  font-size:clamp(2.4rem,5vw,4rem);font-weight:800;letter-spacing:3px;
+  background:linear-gradient(135deg,#60b4ff 0%,#a8d8a8 60%,#ffd580 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+  margin-bottom:.5rem;
+}
+.hero p{font-size:1.1rem;color:rgba(255,255,255,.55);margin-bottom:2.5rem;letter-spacing:.5px}
+.cta{
+  display:inline-block;
+  border:1px solid rgba(96,180,255,.5);
+  background:rgba(96,180,255,.08);
+  color:rgba(255,255,255,.85);
+  padding:.7rem 2rem;border-radius:2rem;font-size:.95rem;cursor:pointer;
+  backdrop-filter:blur(6px);pointer-events:all;
+  animation:glowpulse 2.4s ease-in-out infinite;
+  transition:background .2s,border-color .2s;
+  user-select:none;
+}
+.cta:hover{background:rgba(96,180,255,.18);border-color:rgba(96,180,255,.9)}
+@keyframes glowpulse{
+  0%,100%{box-shadow:0 0 0 rgba(96,180,255,0)}
+  50%{box-shadow:0 0 18px rgba(96,180,255,.35)}
+}
+
+/* ─── Map View ───────────────────────────────────────────────── */
+#map-view{
+  position:fixed;inset:0;z-index:10;
+  opacity:0;pointer-events:none;
+  transition:opacity .8s ease;
+}
+#map-view.show{opacity:1;pointer-events:all}
+
+#map{position:absolute;inset:0;background:#1a2540}
+
+/* top bar */
+#topbar{
+  position:absolute;top:0;left:0;right:0;height:58px;z-index:1000;
+  background:rgba(16,24,52,.88);backdrop-filter:blur(16px);
+  border-bottom:1px solid rgba(255,255,255,.1);
+  display:flex;align-items:center;gap:12px;padding:0 16px;
+}
+.logo-sm{
+  font-weight:800;font-size:1.15rem;letter-spacing:1px;
+  background:linear-gradient(135deg,#60b4ff,#a8d8a8);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+#back-btn{
+  background:rgba(96,180,255,.12);border:1px solid rgba(96,180,255,.35);
+  color:#60b4ff;padding:.35rem .9rem;border-radius:.4rem;cursor:pointer;
+  font-size:.8rem;transition:background .2s;white-space:nowrap;
+}
+#back-btn:hover{background:rgba(96,180,255,.28)}
+
+/* search bar */
+#search-wrap{
+  flex:1;max-width:380px;position:relative;
+}
+#search-input{
+  width:100%;background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.14);
+  color:#fff;padding:.42rem .9rem .42rem 2.2rem;
+  border-radius:.45rem;font-size:.85rem;outline:none;
+  transition:border-color .2s;
+}
+#search-input:focus{border-color:#60b4ff}
+#search-input::placeholder{color:rgba(255,255,255,.35)}
+.search-icon{
+  position:absolute;left:.65rem;top:50%;transform:translateY(-50%);
+  font-size:.85rem;opacity:.5;pointer-events:none;
+}
+#search-results{
+  position:absolute;top:calc(100% + 4px);left:0;right:0;
+  background:rgba(16,24,52,.98);border:1px solid rgba(255,255,255,.12);
+  border-radius:.45rem;overflow:hidden;z-index:2000;display:none;
+}
+.sr-item{
+  padding:.55rem .9rem;font-size:.82rem;cursor:pointer;
+  border-bottom:1px solid rgba(255,255,255,.06);color:rgba(255,255,255,.8);
+  transition:background .15s;
+}
+.sr-item:last-child{border-bottom:none}
+.sr-item:hover{background:rgba(96,180,255,.15);color:#fff}
+
+/* draw hint */
+#draw-hint{
+  margin-left:auto;font-size:.78rem;color:rgba(255,255,255,.4);
+  display:flex;align-items:center;gap:.4rem;white-space:nowrap;
+}
+
+/* ─── Side Panel ─────────────────────────────────────────────── */
+#panel{
+  position:absolute;top:58px;right:0;bottom:0;width:300px;z-index:900;
+  background:rgba(16,24,52,.88);backdrop-filter:blur(16px);
+  border-left:1px solid rgba(255,255,255,.09);
+  display:flex;flex-direction:column;
+}
+.panel-head{
+  padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.07);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.panel-head h2{font-size:.95rem;font-weight:600;color:rgba(255,255,255,.9)}
+#plot-badge{
+  background:#60b4ff;color:#000;font-size:.7rem;font-weight:700;
+  padding:.15rem .55rem;border-radius:1rem;min-width:22px;text-align:center;
+}
+#plots-list{flex:1;overflow-y:auto;padding:10px}
+#plots-list::-webkit-scrollbar{width:3px}
+#plots-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:2px}
+
+.plot-card{
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+  border-radius:.5rem;padding:10px 12px;margin-bottom:8px;
+  transition:border-color .2s,background .2s;
+}
+.plot-card:hover{background:rgba(96,180,255,.07);border-color:rgba(96,180,255,.25)}
+.pc-name{font-size:.88rem;font-weight:600;color:#fff;margin-bottom:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-meta{font-size:.73rem;color:rgba(255,255,255,.38);margin-bottom:7px}
+.pc-actions{display:flex;gap:6px}
+.btn-xs{
+  padding:.2rem .65rem;border-radius:.3rem;border:none;cursor:pointer;
+  font-size:.72rem;font-weight:600;transition:background .2s;
+}
+.btn-view{background:rgba(96,180,255,.18);color:#60b4ff}
+.btn-view:hover{background:rgba(96,180,255,.35)}
+.btn-del{background:rgba(239,83,80,.18);color:#ef5350}
+.btn-del:hover{background:rgba(239,83,80,.35)}
+
+.empty{
+  text-align:center;padding:2.5rem 1rem;color:rgba(255,255,255,.25);
+  font-size:.85rem;line-height:1.6;
+}
+.empty-icon{font-size:2rem;margin-bottom:.5rem}
+
+/* ─── Save Modal ─────────────────────────────────────────────── */
+#modal-bg{
+  position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:3000;
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity .25s;
+}
+#modal-bg.show{opacity:1;pointer-events:all}
+.modal{
+  background:#101830;border:1px solid rgba(255,255,255,.13);
+  border-radius:.75rem;padding:1.5rem;width:360px;
+  transform:translateY(10px);transition:transform .25s;
+}
+#modal-bg.show .modal{transform:translateY(0)}
+.modal h3{font-size:1rem;font-weight:700;margin-bottom:1rem;color:rgba(255,255,255,.9)}
+.modal label{font-size:.78rem;color:rgba(255,255,255,.45);display:block;margin-bottom:.3rem}
+.modal input{
+  width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);
+  color:#fff;padding:.55rem .8rem;border-radius:.4rem;font-size:.88rem;
+  outline:none;margin-bottom:.2rem;transition:border-color .2s;
+}
+.modal input:focus{border-color:#60b4ff}
+.modal-area{font-size:.75rem;color:rgba(255,255,255,.3);margin-bottom:1.1rem}
+.modal-actions{display:flex;justify-content:flex-end;gap:.6rem}
+.btn-primary{
+  background:#60b4ff;color:#000;border:none;padding:.5rem 1.3rem;
+  border-radius:.4rem;cursor:pointer;font-weight:700;font-size:.88rem;
+  transition:background .2s;
+}
+.btn-primary:hover{background:#90caf9}
+.btn-ghost{
+  background:transparent;border:1px solid rgba(255,255,255,.15);
+  color:rgba(255,255,255,.6);padding:.5rem 1rem;border-radius:.4rem;
+  cursor:pointer;font-size:.88rem;transition:background .2s;
+}
+.btn-ghost:hover{background:rgba(255,255,255,.06)}
+
+/* ─── Toast ─────────────────────────────────────────────────── */
+#toast{
+  position:fixed;bottom:2rem;left:50%;z-index:9999;
+  transform:translateX(-50%) translateY(80px);
+  background:rgba(16,24,52,.97);border:1px solid rgba(96,180,255,.35);
+  color:#fff;padding:.5rem 1.3rem;border-radius:.5rem;font-size:.83rem;
+  transition:transform .3s ease;white-space:nowrap;
+  pointer-events:none;
+}
+#toast.show{transform:translateX(-50%) translateY(0)}
+
+/* ─── Coordinate HUD ────────────────────────────────────────── */
+#coord-hud{
+  position:absolute;bottom:28px;left:10px;z-index:950;
+  background:rgba(16,24,52,.88);backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.1);
+  color:rgba(255,255,255,.65);padding:.28rem .75rem;
+  border-radius:.35rem;font-size:.72rem;font-family:'Courier New',monospace;
+  pointer-events:none;white-space:nowrap;letter-spacing:.4px;
+  transition:opacity .2s;
+}
+#coord-hud.dim{opacity:.4}
+
+/* coord row inside plot cards */
+.pc-coords{
+  font-size:.7rem;font-family:'Courier New',monospace;
+  color:rgba(255,255,255,.38);margin-bottom:6px;
+  display:flex;align-items:center;gap:6px;
+}
+.btn-copy-coord{
+  background:rgba(96,180,255,.12);border:1px solid rgba(96,180,255,.2);
+  color:#60b4ff;font-size:.65rem;padding:.1rem .4rem;
+  border-radius:.25rem;cursor:pointer;white-space:nowrap;
+  transition:background .15s;flex-shrink:0;
+}
+.btn-copy-coord:hover{background:rgba(96,180,255,.28)}
+
+/* coord pill shown in coord-search result */
+.sr-coord-pill{
+  display:inline-block;background:rgba(96,180,255,.18);
+  color:#60b4ff;font-size:.7rem;padding:.1rem .5rem;
+  border-radius:1rem;margin-right:.4rem;font-family:monospace;
+}
+
+/* ─── Leaflet tweaks ─────────────────────────────────────────── */
+.leaflet-top{margin-top:68px!important}
+.leaflet-right .leaflet-control{margin-right:312px!important}
+.leaflet-bottom{margin-bottom:6px}
+.leaflet-control-zoom a{
+  background:rgba(16,24,52,.92)!important;color:#90c4f0!important;
+  border-color:rgba(255,255,255,.14)!important;
+}
+.leaflet-control-zoom a:hover{background:rgba(30,45,90,.95)!important}
+.leaflet-draw-toolbar a{
+  background-color:rgba(16,24,52,.92)!important;
+  border-bottom-color:rgba(255,255,255,.12)!important;
+}
+.leaflet-draw-toolbar a:hover{background-color:rgba(30,45,90,.95)!important}
+.leaflet-draw-actions a{background:#182850!important;color:#90c4f0!important}
+.leaflet-draw-actions a:hover{background:#223870!important}
+.leaflet-popup-content-wrapper{
+  background:rgba(16,24,52,.97)!important;border:1px solid rgba(255,255,255,.12)!important;
+  color:#fff!important;border-radius:.5rem!important;
+}
+.leaflet-popup-tip{background:rgba(16,24,52,.97)!important}
+/* Layer control dark theme */
+.leaflet-control-layers{
+  background:rgba(16,24,52,.95)!important;
+  border:1px solid rgba(255,255,255,.12)!important;
+  border-radius:.5rem!important;
+  backdrop-filter:blur(10px)!important;
+  padding:4px!important;
+  color:rgba(255,255,255,.8)!important;
+}
+.leaflet-control-layers-list label{color:rgba(255,255,255,.75)!important;font-size:.8rem}
+.leaflet-control-layers-separator{border-top-color:rgba(255,255,255,.1)!important}
+.leaflet-control-layers-toggle{
+  background-color:rgba(16,24,52,.92)!important;
+}
+
+/* India badge in topbar */
+#india-badge{
+  display:flex;align-items:center;gap:5px;
+  background:rgba(255,153,51,.12);border:1px solid rgba(255,153,51,.3);
+  color:rgba(255,200,100,.9);padding:.3rem .75rem;
+  border-radius:.4rem;font-size:.78rem;white-space:nowrap;
+  font-weight:600;letter-spacing:.3px;
+}
+
+/* Layer status pill */
+#layer-status{
+  position:absolute;bottom:28px;left:50%;transform:translateX(-50%);
+  z-index:950;
+  background:rgba(16,24,52,.88);backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.1);
+  color:rgba(255,255,255,.55);padding:.25rem .8rem;
+  border-radius:1rem;font-size:.72rem;white-space:nowrap;
+  pointer-events:none;
+  transition:opacity .4s;
+}
+#layer-status.hidden{opacity:0}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ EARTH VIEW ═══════════ -->
+<div id="earth-view">
+  <canvas id="three-canvas"></canvas>
+  <div class="hero">
+    <h1>LandMark</h1>
+    <p>Select, claim, and manage plots of land worldwide</p>
+    <div class="cta" id="explore-btn">🌍&nbsp;&nbsp;Click to Explore</div>
+  </div>
+</div>
+
+<!-- ═══════════ MAP VIEW ═══════════ -->
+<div id="map-view">
+
+  <!-- top bar -->
+  <div id="topbar">
+    <button id="back-btn" onclick="goHome()">← Globe</button>
+    <span class="logo-sm">LandMark</span>
+
+    <div id="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input id="search-input" type="text" placeholder="Search India — city, district, village or lat, lng…" autocomplete="off"/>
+      <div id="search-results"></div>
+    </div>
+
+    <div id="india-badge">🇮🇳 India Focus</div>
+
+    <div id="draw-hint">
+      <span>✏️</span><span>Draw a polygon to select land</span>
+    </div>
+  </div>
+
+  <div id="map"></div>
+  <div id="coord-hud">Move cursor over map</div>
+  <div id="layer-status" class="hidden"></div>
+
+  <!-- side panel -->
+  <div id="panel">
+    <div class="panel-head">
+      <h2>Saved Plots</h2>
+      <span id="plot-badge">0</span>
+    </div>
+    <div id="plots-list">
+      <div class="empty">
+        <div class="empty-icon">🗺️</div>
+        No plots yet.<br>Draw on the map to select land.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ SAVE MODAL ═══════════ -->
+<div id="modal-bg">
+  <div class="modal">
+    <h3>Name Your Plot</h3>
+    <label>Plot name</label>
+    <input id="plot-name" type="text" placeholder="e.g. Riverside Farm, Block A…" maxlength="80"/>
+    <div class="modal-area" id="modal-area-text"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="cancelSave()">Cancel</button>
+      <button class="btn-primary" onclick="confirmSave()">Save Plot</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- ═══════════ SCRIPTS ═══════════ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+<script>
+// ══════════════════════════════════════════════
+//  THREE.JS — 3-D EARTH
+// ══════════════════════════════════════════════
+
+const canvas3d = document.getElementById('three-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas: canvas3d, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 800);
+camera.position.z = 2.6;
+
+// ── Stars ──────────────────────────────────
+const starVerts = [];
+for (let i = 0; i < 12000; i++) {
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  const r = 80 + Math.random() * 300;
+  starVerts.push(
+    r * Math.sin(phi) * Math.cos(theta),
+    r * Math.sin(phi) * Math.sin(theta),
+    r * Math.cos(phi)
+  );
+}
+const starGeo = new THREE.BufferGeometry();
+starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
+scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({
+  color: 0xffffff, size: 0.18, transparent: true, opacity: 0.75
+})));
+
+// ── Canvas Earth Texture ───────────────────
+function buildEarthTexture() {
+  const W = 2048, H = 1024;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+
+  // Ocean gradient
+  const og = ctx.createLinearGradient(0, 0, 0, H);
+  og.addColorStop(0,   '#071525');
+  og.addColorStop(0.2, '#0a2540');
+  og.addColorStop(0.5, '#0d3460');
+  og.addColorStop(0.8, '#0a2540');
+  og.addColorStop(1,   '#071525');
+  ctx.fillStyle = og;
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle ocean shimmer
+  ctx.globalAlpha = 0.18;
+  for (let i = 0; i < 60; i++) {
+    const x = Math.random()*W, y = Math.random()*H;
+    const r = 60 + Math.random()*180;
+    const rg = ctx.createRadialGradient(x, y, 0, x, y, r);
+    rg.addColorStop(0, '#1565c0'); rg.addColorStop(1, 'transparent');
+    ctx.fillStyle = rg;
+    ctx.beginPath(); ctx.ellipse(x, y, r, r*0.55, Math.random()*Math.PI, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Helper: draw a land shape from lon/lat waypoints
+  // equirectangular: x = (lon+180)/360*W,  y = (90-lat)/180*H
+  function ll(lon, lat) { return [(lon+180)/360*W, (90-lat)/180*H]; }
+  function land(pts, color='#2d6030') {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(...ll(...pts[0]));
+    for (let i=1;i<pts.length;i++) ctx.lineTo(...ll(...pts[i]));
+    ctx.closePath(); ctx.fill();
+  }
+  function highlight(pts) {
+    ctx.fillStyle = 'rgba(80,140,70,.35)';
+    ctx.beginPath();
+    ctx.moveTo(...ll(...pts[0]));
+    for (let i=1;i<pts.length;i++) ctx.lineTo(...ll(...pts[i]));
+    ctx.closePath(); ctx.fill();
+  }
+
+  // ── North America ──
+  land([[-168,72],[-140,70],[-120,60],[-95,49],[-75,45],[-65,47],[-60,46],[-63,44],[-70,43],[-72,41],[-80,25],[-87,15],[-90,16],[-94,20],[-105,22],[-110,24],[-118,29],[-120,35],[-124,40],[-128,50],[-140,58],[-155,60],[-162,63],[-168,66]]);
+  highlight([[-115,55],[-90,55],[-80,45],[-100,40],[-110,45]]);
+
+  // ── Greenland ──
+  land([[-57,83],[-20,83],[-17,76],[-20,70],[-30,68],[-44,65],[-52,67],[-58,70],[-60,76],[-57,83]],'#3a7040');
+
+  // ── South America ──
+  land([[-80,12],[-72,12],[-60,5],[-50,0],[-35,-5],[-35,-12],[-40,-22],[-45,-24],[-48,-28],[-52,-34],[-58,-38],[-65,-42],[-68,-55],[-74,-55],[-75,-48],[-73,-42],[-70,-30],[-72,-18],[-78,-5],[-80,0],[-80,12]]);
+
+  // ── Europe ──
+  land([[15,72],[28,71],[30,62],[25,60],[30,55],[18,58],[10,55],[8,48],[0,43],[-5,44],[-9,39],[0,36],[12,38],[15,40],[13,45],[15,48],[20,50],[18,55],[15,56],[10,56],[8,58],[10,62],[15,68],[22,71],[15,72]]);
+
+  // ── Africa ──
+  land([[-5,37],[12,37],[32,30],[36,22],[42,10],[44,2],[40,-4],[34,-12],[30,-22],[26,-34],[18,-35],[12,-30],[8,-16],[2,-2],[-4,4],[-12,10],[-16,12],[-18,16],[-16,24],[-8,28],[-5,34],[-5,37]]);
+
+  // ── Russia / North Asia ──
+  land([[28,72],[40,70],[60,72],[80,73],[100,72],[120,72],[140,70],[160,68],[170,64],[170,58],[160,52],[145,48],[140,46],[135,48],[130,42],[125,50],[110,52],[100,52],[90,52],[80,56],[70,52],[60,55],[55,52],[50,48],[40,44],[36,47],[32,50],[28,56],[24,62],[26,68],[28,72]]);
+
+  // ── Middle East ──
+  land([[36,37],[42,37],[55,24],[58,22],[56,14],[48,14],[44,10],[42,14],[36,22],[34,28],[36,37]]);
+
+  // ── South / Central Asia ──
+  land([[60,38],[65,36],[70,38],[76,34],[72,28],[70,22],[76,10],[80,6],[85,12],[90,22],[95,28],[100,30],[102,22],[106,10],[108,18],[110,22],[105,28],[100,36],[92,44],[88,48],[82,52],[76,46],[70,44],[62,42],[58,44],[54,42],[56,36],[60,38]]);
+
+  // ── India ──
+  land([[72,22],[74,32],[80,34],[88,28],[92,22],[88,14],[80,10],[76,8],[72,10],[68,22],[72,22]]);
+
+  // ── SE Asia / Indonesia ──
+  land([[100,4],[105,2],[108,4],[110,2],[116,8],[120,14],[116,18],[110,20],[104,18],[100,10],[100,4]]);
+
+  // ── China / East Asia ──
+  land([[80,50],[88,48],[96,52],[110,52],[120,52],[130,46],[130,40],[122,36],[120,26],[110,20],[106,22],[102,22],[96,28],[90,28],[84,34],[76,36],[80,42],[82,50],[80,50]]);
+
+  // ── Japan ──
+  land([[135,44],[142,44],[142,38],[138,34],[132,34],[130,38],[133,42],[135,44]]);
+
+  // ── Australia ──
+  land([[114,-22],[120,-18],[128,-14],[136,-12],[140,-18],[148,-20],[154,-26],[154,-34],[148,-38],[142,-38],[136,-36],[130,-32],[116,-34],[112,-28],[114,-22]]);
+
+  // ── New Zealand hint ──
+  land([[172,-34],[174,-36],[176,-40],[172,-44],[170,-42],[170,-38],[172,-34]]);
+
+  // ── Antarctica ──
+  ctx.globalAlpha = 0.55;
+  land([[-180,-70],[0,-70],[180,-70],[180,-90],[-180,-90],[-180,-70]],'#c8ddf0');
+  ctx.globalAlpha = 1;
+
+  // ── Polar ice cap ──
+  ctx.globalAlpha = 0.45;
+  ctx.fillStyle = '#d6eaf8';
+  ctx.fillRect(0, 0, W, H*0.06);
+  ctx.globalAlpha = 1;
+
+  return new THREE.CanvasTexture(c);
+}
+
+// ── Earth Mesh ─────────────────────────────
+const earthGeo = new THREE.SphereGeometry(1, 80, 80);
+const earthMat = new THREE.MeshPhongMaterial({
+  map: buildEarthTexture(),
+  specular: new THREE.Color(0x0a1428),
+  shininess: 22,
+});
+const earth = new THREE.Mesh(earthGeo, earthMat);
+scene.add(earth);
+
+// ── Atmosphere layers ──────────────────────
+function atm(radius, opacity, color=0x3388ff) {
+  const m = new THREE.MeshPhongMaterial({
+    color, transparent:true, opacity,
+    side: THREE.FrontSide, blending: THREE.AdditiveBlending, depthWrite:false
+  });
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(radius,64,64), m));
+}
+atm(1.015, 0.10);
+atm(1.030, 0.05, 0x2266dd);
+// outer backside glow
+const glowMat = new THREE.MeshPhongMaterial({
+  color:0x2255aa, transparent:true, opacity:0.06,
+  side:THREE.BackSide, blending:THREE.AdditiveBlending, depthWrite:false
+});
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(1.07,64,64), glowMat));
+
+// ── Lights ────────────────────────────────
+scene.add(new THREE.AmbientLight(0x1a2a44, 1.0));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+sun.position.set(5, 3, 5);
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0x112244, 0.4);
+fill.position.set(-4, -2, -3);
+scene.add(fill);
+
+// ── Resize ────────────────────────────────
+function resizeGlobe() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+}
+resizeGlobe();
+window.addEventListener('resize', resizeGlobe);
+
+// ── Animate ───────────────────────────────
+let mouseX = 0, mouseY = 0;
+document.addEventListener('mousemove', e => {
+  mouseX = (e.clientX/window.innerWidth - 0.5);
+  mouseY = (e.clientY/window.innerHeight - 0.5);
+});
+
+// Start rotated so India faces the viewer (lon ≈ 79°E → rotate -79° around Y)
+earth.rotation.y = -(79 * Math.PI / 180);
+
+(function animate() {
+  requestAnimationFrame(animate);
+  earth.rotation.y += 0.0018;
+  earth.rotation.x += (mouseY * 0.4 - earth.rotation.x) * 0.03;
+  renderer.render(scene, camera);
+})();
+
+// ── Click transitions ─────────────────────
+document.getElementById('explore-btn').addEventListener('click', openMap);
+canvas3d.addEventListener('click', openMap);
+
+function openMap() {
+  document.getElementById('earth-view').classList.add('exit');
+  document.getElementById('map-view').classList.add('show');
+  if (!mapReady) initMap();
+}
+function goHome() {
+  document.getElementById('map-view').classList.remove('show');
+  document.getElementById('earth-view').classList.remove('exit');
+}
+
+
+// ══════════════════════════════════════════════
+//  LEAFLET MAP
+// ══════════════════════════════════════════════
+
+let mapReady = false, map, drawnItems;
+const plotLayers = {};  // id → Leaflet layer
+
+function showLayerStatus(msg) {
+  const el = document.getElementById('layer-status');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  clearTimeout(showLayerStatus._t);
+  showLayerStatus._t = setTimeout(() => el.classList.add('hidden'), 3000);
+}
+
+function initMap() {
+  mapReady = true;
+
+  // Centred on India, zoom 5 shows the whole country nicely
+  map = L.map('map', { center:[20.5937, 78.9629], zoom:5, zoomControl:false });
+
+  // ── Base layers ───────────────────────────────────────────────
+  const darkBase = L.tileLayer(
+    'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
+    {
+      attribution:'© <a href="https://stadiamaps.com/">Stadia Maps</a> © OpenStreetMap',
+      maxZoom:20
+    }
+  );
+
+  // ISRO Bhuvan WMS — satellite imagery of India
+  // Endpoint: https://bhuvan-app1.nrsc.gov.in/2dresources/bhuvan/wms
+  // Layer "india3" is the national satellite mosaic (Resourcesat-2 / Cartosat)
+  const bhuvanSat = L.tileLayer.wms(
+    'https://bhuvan-app1.nrsc.gov.in/2dresources/bhuvan/wms',
+    {
+      layers: 'india3',
+      format: 'image/jpeg',
+      version: '1.1.1',
+      transparent: false,
+      attribution: '🛰️ <a href="https://bhuvan.nrsc.gov.in/">ISRO/NRSC Bhuvan</a> — Resourcesat Satellite Imagery',
+      maxZoom: 18,
+    }
+  );
+
+  // Default to dark base; switch to Bhuvan later via layer control
+  darkBase.addTo(map);
+
+  // ── ISRO Bhuvan overlay layers ────────────────────────────────
+  // State boundaries from Bhuvan WMS
+  const bhuvanStates = L.tileLayer.wms(
+    'https://bhuvan-app1.nrsc.gov.in/2dresources/bhuvan/wms',
+    {
+      layers: 'india_state',
+      format: 'image/png',
+      version: '1.1.1',
+      transparent: true,
+      opacity: 0.85,
+      attribution: '© ISRO/NRSC Bhuvan',
+    }
+  );
+
+  // District boundaries from Bhuvan WMS
+  const bhuvanDistricts = L.tileLayer.wms(
+    'https://bhuvan-app1.nrsc.gov.in/2dresources/bhuvan/wms',
+    {
+      layers: 'india_district',
+      format: 'image/png',
+      version: '1.1.1',
+      transparent: true,
+      opacity: 0.7,
+      attribution: '© ISRO/NRSC Bhuvan',
+    }
+  );
+
+  // Tehsil (sub-district) boundaries — useful at high zoom for land selection
+  const bhuvanTehsils = L.tileLayer.wms(
+    'https://bhuvan-app1.nrsc.gov.in/2dresources/bhuvan/wms',
+    {
+      layers: 'india_tehsil',
+      format: 'image/png',
+      version: '1.1.1',
+      transparent: true,
+      opacity: 0.6,
+      attribution: '© ISRO/NRSC Bhuvan',
+    }
+  );
+
+  // ── Layer control ─────────────────────────────────────────────
+  const baseMaps = {
+    '🌑 Dark Map': darkBase,
+    '🛰️ ISRO Bhuvan Satellite': bhuvanSat,
+  };
+  const overlayMaps = {
+    '📍 State Boundaries (Bhuvan)': bhuvanStates,
+    '🔲 District Boundaries (Bhuvan)': bhuvanDistricts,
+    '🔹 Tehsil Boundaries (Bhuvan)': bhuvanTehsils,
+  };
+  L.control.layers(baseMaps, overlayMaps, { position:'topright', collapsed:true })
+    .addTo(map);
+
+  // Notify user when switching to Bhuvan satellite
+  map.on('baselayerchange', e => {
+    if (e.name.includes('Bhuvan')) {
+      showLayerStatus('🛰️ ISRO Bhuvan — Resourcesat-2 / Cartosat satellite imagery');
+    }
+  });
+  map.on('overlayadd', e => {
+    showLayerStatus('✓ ' + e.name + ' added');
+  });
+
+  L.control.zoom({ position:'bottomright' }).addTo(map);
+
+  // Draw layer
+  drawnItems = new L.FeatureGroup().addTo(map);
+
+  const drawCtrl = new L.Control.Draw({
+    position:'topleft',
+    edit:{ featureGroup:drawnItems, remove:true },
+    draw:{
+      polygon:{
+        allowIntersection:false,
+        drawError:{ color:'#ef5350', message:'Lines cannot cross!' },
+        shapeOptions:{ color:'#60b4ff', fillOpacity:.22, weight:2 }
+      },
+      rectangle:{
+        shapeOptions:{ color:'#60b4ff', fillOpacity:.22, weight:2 }
+      },
+      circle:false, polyline:false, marker:false, circlemarker:false
+    }
+  });
+  map.addControl(drawCtrl);
+
+  // Created event → open save modal
+  map.on(L.Draw.Event.CREATED, e => {
+    pendingLayer = e.layer;
+    const coords = flatCoords(pendingLayer);
+    const area = calcArea(coords);
+    document.getElementById('modal-area-text').textContent =
+      coords.length + ' vertices · ≈' + fmtArea(area);
+    document.getElementById('plot-name').value = '';
+    showModal();
+  });
+
+  // Deleted from map toolbar → remove from API
+  map.on(L.Draw.Event.DELETED, e => {
+    e.layers.eachLayer(layer => {
+      const id = Object.keys(plotLayers).find(k => plotLayers[k] === layer);
+      if (id) deletePlot(id, false);
+    });
+  });
+
+  // ── Coordinate HUD — live cursor position ──
+  const hud = document.getElementById('coord-hud');
+  map.on('mousemove', e => {
+    hud.textContent = fmtCoord(e.latlng.lat) + ',  ' + fmtCoord(e.latlng.lng);
+    hud.classList.remove('dim');
+  });
+  map.on('mouseout', () => hud.classList.add('dim'));
+
+  // ── Click anywhere to pin & show coordinates ──
+  let isDrawing = false;
+  map.on('draw:drawstart', () => { isDrawing = true; });
+  map.on('draw:drawstop',  () => { isDrawing = false; });
+
+  let clickPin = null;
+  map.on('click', e => {
+    if (isDrawing) return;
+    if (clickPin) map.removeLayer(clickPin);
+    const lat = e.latlng.lat, lng = e.latlng.lng;
+    const coordStr = fmtCoord(lat) + ', ' + fmtCoord(lng);
+    clickPin = L.circleMarker([lat, lng], {
+      radius:7, color:'#ffd580', fillColor:'#ffd580', fillOpacity:.6, weight:2
+    }).addTo(map);
+    clickPin.bindPopup(
+      `<div style="font-family:'Courier New',monospace;font-size:.82rem;line-height:1.7">
+        <b style="font-size:.85rem">📍 Pinned Location</b><br>
+        Lat: <b>${fmtCoord(lat)}</b><br>
+        Lng: <b>${fmtCoord(lng)}</b><br>
+        <span style="font-size:.7rem;opacity:.55">${coordStr}</span><br>
+        <button onclick="copyText('${coordStr}')"
+          style="margin-top:6px;padding:.2rem .7rem;background:rgba(96,180,255,.2);
+          border:1px solid rgba(96,180,255,.4);color:#90c4f0;border-radius:.3rem;
+          cursor:pointer;font-size:.72rem;">Copy</button>
+      </div>`,
+      { maxWidth:220 }
+    ).openPopup();
+  });
+
+  loadPlots();
+}
+
+// ── Search ────────────────────────────────
+let searchTimeout;
+const searchInput = document.getElementById('search-input');
+const searchResults = document.getElementById('search-results');
+
+// Try to parse "lat, lng" or "lat lng" decimal degree strings
+function parseLatLng(q) {
+  const m = q.trim().match(/^(-?\d{1,3}\.?\d*)[,\s]+(-?\d{1,3}\.?\d*)$/);
+  if (!m) return null;
+  const lat = parseFloat(m[1]), lng = parseFloat(m[2]);
+  if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) return [lat, lng];
+  return null;
+}
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimeout);
+  const q = searchInput.value.trim();
+  if (q.length < 2) { searchResults.style.display='none'; return; }
+
+  // Instant coord detection — show jump option immediately
+  const coords = parseLatLng(q);
+  if (coords) {
+    const [lat, lng] = coords;
+    searchResults.innerHTML = `
+      <div class="sr-item coord-jump" data-lat="${lat}" data-lng="${lng}">
+        <span class="sr-coord-pill">📍 ${fmtCoord(lat)}, ${fmtCoord(lng)}</span>
+        Jump to coordinates
+      </div>`;
+    searchResults.style.display = 'block';
+    return;
+  }
+
+  if (q.length < 3) return;
+  searchTimeout = setTimeout(() => doSearch(q), 380);
+});
+
+searchInput.addEventListener('keydown', e => {
+  if (e.key==='Enter') {
+    const first = searchResults.querySelector('.sr-item');
+    if (first) first.click();
+  }
+  if (e.key==='Escape') { searchResults.style.display='none'; searchInput.blur(); }
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#search-wrap')) searchResults.style.display='none';
+});
+
+// Delegate coord-jump clicks (also handles dynamically added items)
+searchResults.addEventListener('click', e => {
+  const item = e.target.closest('.coord-jump');
+  if (!item) return;
+  const lat = parseFloat(item.dataset.lat), lng = parseFloat(item.dataset.lng);
+  map.setView([lat, lng], 14);
+  // Drop a temporary pin
+  const pin = L.circleMarker([lat, lng], {
+    radius:8, color:'#60b4ff', fillColor:'#60b4ff',
+    fillOpacity:.5, weight:2
+  }).addTo(map);
+  pin.bindPopup(`<b>${fmtCoord(lat)}, ${fmtCoord(lng)}</b>`).openPopup();
+  setTimeout(() => map.removeLayer(pin), 8000);
+  searchInput.value = `${fmtCoord(lat)}, ${fmtCoord(lng)}`;
+  searchResults.style.display = 'none';
+});
+
+async function doSearch(q) {
+  try {
+    const res = await fetch('/api/geocode?q=' + encodeURIComponent(q));
+    const data = await res.json();
+    if (!data.length) {
+      searchResults.innerHTML='<div class="sr-item" style="pointer-events:none;opacity:.5">No results found</div>';
+      searchResults.style.display='block'; return;
+    }
+    searchResults.innerHTML = data.slice(0,5).map((d,i) =>
+      `<div class="sr-item" data-i="${i}" data-lat="${d.lat}" data-lon="${d.lon}"
+        data-bb="${d.boundingbox ? d.boundingbox.join(',') : ''}">${esc(d.display_name)}</div>`
+    ).join('');
+    searchResults.style.display = 'block';
+    searchResults.querySelectorAll('.sr-item:not(.coord-jump)').forEach(el => {
+      el.addEventListener('click', () => {
+        const bb = el.dataset.bb.split(',').filter(Boolean);
+        if (bb.length===4) map.fitBounds([[+bb[0],+bb[2]],[+bb[1],+bb[3]]], {padding:[30,30]});
+        else map.setView([+el.dataset.lat, +el.dataset.lon], 12);
+        searchInput.value = el.textContent;
+        searchResults.style.display = 'none';
+      });
+    });
+  } catch(e) { showToast('Search failed'); }
+}
+
+
+// ── Plots API ────────────────────────────
+async function loadPlots() {
+  try {
+    const res = await fetch('/api/plots');
+    const plots = await res.json();
+    renderPlots(plots);
+  } catch(e) { console.error(e); }
+}
+
+function renderPlots(plots) {
+  document.getElementById('plot-badge').textContent = plots.length;
+  const list = document.getElementById('plots-list');
+
+  if (!plots.length) {
+    list.innerHTML = `<div class="empty"><div class="empty-icon">🗺️</div>No plots yet.<br>Draw on the map to select land.</div>`;
+    return;
+  }
+
+  list.innerHTML = plots.map(p => {
+    const [cLat, cLng] = centroid(p.coordinates);
+    const coordStr = fmtCoord(cLat) + ', ' + fmtCoord(cLng);
+    return `
+    <div class="plot-card" id="pc-${p.id}">
+      <div class="pc-name">${esc(p.name)}</div>
+      <div class="pc-meta">${p.area ? fmtArea(p.area)+' · ' : ''}${p.coordinates.length} pts · ${fmtDate(p.created_at)}</div>
+      <div class="pc-coords">
+        <span>${coordStr}</span>
+        <button class="btn-copy-coord" onclick="copyText('${coordStr}')">Copy</button>
+      </div>
+      <div class="pc-actions">
+        <button class="btn-xs btn-view" onclick="focusPlot('${p.id}')">View</button>
+        <button class="btn-xs btn-del" onclick="deletePlot('${p.id}',true)">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // draw any plots not yet on map (loaded from a previous session)
+  plots.forEach(p => {
+    if (!plotLayers[p.id]) {
+      const latlngs = p.coordinates.map(c=>[c[0],c[1]]);
+      const layer = L.polygon(latlngs, { color:'#60b4ff', fillOpacity:.2, weight:2 });
+      const [cLat,cLng] = centroid(p.coordinates);
+      layer.bindPopup(plotPopupHtml(p.name, p.area, cLat, cLng));
+      drawnItems.addLayer(layer);
+      plotLayers[p.id] = layer;
+    }
+  });
+}
+
+function focusPlot(id) {
+  const layer = plotLayers[id];
+  if (!layer) return;
+  map.fitBounds(layer.getBounds(), {padding:[60,80]});
+  layer.setStyle({ color:'#a5d6a7', fillOpacity:.35 });
+  setTimeout(() => layer.setStyle({ color:'#60b4ff', fillOpacity:.2 }), 1600);
+  layer.openPopup();
+}
+
+async function deletePlot(id, removeFromMap) {
+  if (!confirm('Delete this plot?')) return;
+  try {
+    await fetch('/api/plots/'+id, { method:'DELETE' });
+    if (removeFromMap && plotLayers[id]) drawnItems.removeLayer(plotLayers[id]);
+    delete plotLayers[id];
+    showToast('Plot deleted');
+    loadPlots();
+  } catch(e) { showToast('Delete failed'); }
+}
+
+
+// ── Save Modal ───────────────────────────
+let pendingLayer = null;
+
+function showModal() {
+  document.getElementById('modal-bg').classList.add('show');
+  setTimeout(() => document.getElementById('plot-name').focus(), 80);
+}
+function cancelSave() {
+  document.getElementById('modal-bg').classList.remove('show');
+  pendingLayer = null;
+}
+
+document.getElementById('plot-name').addEventListener('keydown', e => {
+  if (e.key==='Enter') confirmSave();
+  if (e.key==='Escape') cancelSave();
+});
+
+async function confirmSave() {
+  if (!pendingLayer) return;
+  const name = document.getElementById('plot-name').value.trim() || 'Unnamed Plot';
+  const coords = flatCoords(pendingLayer);
+  const area = calcArea(coords);
+  try {
+    const res = await fetch('/api/plots', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ name, coordinates:coords, area })
+    });
+    const plot = await res.json();
+    const [cLat,cLng] = centroid(coords);
+    pendingLayer.bindPopup(plotPopupHtml(name, area, cLat, cLng));
+    drawnItems.addLayer(pendingLayer);
+    plotLayers[plot.id] = pendingLayer;
+    pendingLayer = null;
+    document.getElementById('modal-bg').classList.remove('show');
+    showToast('✓ "'+name+'" saved');
+    loadPlots();
+  } catch(e) { showToast('Save failed'); }
+}
+
+
+// ── Utilities ────────────────────────────
+function flatCoords(layer) {
+  let ll = layer.getLatLngs();
+  if (Array.isArray(ll[0])) ll = ll[0]; // polygon outer ring
+  return ll.map(p => [p.lat, p.lng]);
+}
+
+function calcArea(coords) {
+  // Shoelace / spherical excess approximation → km²
+  if (coords.length < 3) return 0;
+  const R = 6371;
+  let area = 0;
+  for (let i=0; i<coords.length; i++) {
+    const j=(i+1)%coords.length;
+    const [la1,lo1]=coords[i], [la2,lo2]=coords[j];
+    area += (lo2-lo1)*Math.PI/180 * (2 + Math.sin(la1*Math.PI/180) + Math.sin(la2*Math.PI/180));
+  }
+  return Math.abs(area*R*R/2);
+}
+
+function fmtArea(km2) {
+  if (km2>=1e6) return (km2/1e6).toFixed(2)+' M km²';
+  if (km2>=1000) return (km2/1000).toFixed(2)+' k km²';
+  if (km2>=1)   return km2.toFixed(2)+' km²';
+  return (km2*1e6).toFixed(0)+' m²';
+}
+
+function fmtDate(iso) {
+  return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+
+function fmtCoord(n) {
+  return parseFloat(n).toFixed(5);
+}
+
+function centroid(coords) {
+  const lat = coords.reduce((s,c) => s+c[0], 0) / coords.length;
+  const lng = coords.reduce((s,c) => s+c[1], 0) / coords.length;
+  return [lat, lng];
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(
+    () => showToast('Copied: ' + text),
+    () => showToast('Copy failed')
+  );
+}
+
+function plotPopupHtml(name, area, cLat, cLng) {
+  const coordStr = fmtCoord(cLat) + ', ' + fmtCoord(cLng);
+  return `<div style="font-family:'Segoe UI',sans-serif;min-width:170px">
+    <b style="font-size:.9rem">${esc(name)}</b><br>
+    <span style="font-size:.75rem;opacity:.6">${area ? fmtArea(area) : ''}</span>
+    <hr style="border:none;border-top:1px solid rgba(255,255,255,.1);margin:5px 0"/>
+    <div style="font-family:'Courier New',monospace;font-size:.73rem;opacity:.8;margin-bottom:5px">${coordStr}</div>
+    <button onclick="copyText('${coordStr}')"
+      style="padding:.2rem .7rem;background:rgba(96,180,255,.2);
+      border:1px solid rgba(96,180,255,.35);color:#90c4f0;border-radius:.3rem;
+      cursor:pointer;font-size:.7rem;">Copy coords</button>
+  </div>`;
+}
+
+function esc(s) {
+  const d=document.createElement('div');
+  d.appendChild(document.createTextNode(s));
+  return d.innerHTML;
+}
+
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+</script>
+</body>
+</html>
