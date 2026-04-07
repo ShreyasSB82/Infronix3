@@ -1,18 +1,23 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from typing import List, Optional
-import json, sqlite3, uuid, httpx
+from typing import List, Optional, Dict, Any
+import json, sqlite3, uuid, httpx, io, ezdxf
 from datetime import datetime
 from pathlib import Path
+from dotenv import load_dotenv
 
-app = FastAPI(title="LandMark – Land Selection Platform")
+load_dotenv()
 
+from app.api.routes.site_plan import router as site_plan_router
+from app.api.routes.layout_planner import router as layout_planner_router
+
+app = FastAPI(title="Infronix – Land Intelligence Platform")
+app.include_router(site_plan_router, prefix="/api/site-plan")
+app.include_router(layout_planner_router, prefix="/api/layout-planner")
+templates = Jinja2Templates(directory="templates")
 DB_PATH = "plots.db"
-
-
-# --------------- Database ---------------
-
 def _db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -33,17 +38,12 @@ def _init_db():
     conn.commit()
     conn.close()
 
-
 _init_db()
-
-
-# --------------- Models ---------------
 
 class PlotCreate(BaseModel):
     name: str
     coordinates: List[List[float]]   # [[lat, lng], ...]
     area: Optional[float] = None
-
 
 class Plot(BaseModel):
     id: str
@@ -52,13 +52,29 @@ class Plot(BaseModel):
     area: Optional[float]
     created_at: str
 
-
-# --------------- Routes ---------------
-
 @app.get("/", response_class=HTMLResponse)
-async def index():
-    return Path("templates/index.html").read_text()
+def landing(request: Request):
+    return templates.TemplateResponse(request=request, name="landing.html")
 
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    return templates.TemplateResponse(request=request, name="login.html")
+
+@app.get("/app", response_class=HTMLResponse)
+def app_page(request: Request):
+    return templates.TemplateResponse(request=request, name="index.html")
+
+@app.get("/urbanscribe", response_class=HTMLResponse)
+def urbanscribe_page(request: Request):
+    return templates.TemplateResponse(request=request, name="urbanscribe.html")
+
+@app.get("/layout-planner", response_class=HTMLResponse)
+def layout_planner_page(request: Request):
+    return templates.TemplateResponse(request=request, name="layout_planner.html")
+
+@app.get("/api/config")
+async def config():
+    return {"ok": True}
 
 @app.get("/api/plots", response_model=List[Plot])
 async def list_plots():
@@ -73,7 +89,6 @@ async def list_plots():
         )
         for r in rows
     ]
-
 
 @app.post("/api/plots", response_model=Plot, status_code=201)
 async def create_plot(body: PlotCreate):
@@ -141,3 +156,67 @@ async def bhuvan_capabilities():
             params={"SERVICE": "WMS", "REQUEST": "GetCapabilities", "VERSION": "1.1.1"},
         )
     return resp.text
+
+# ----------------- Geometry / CAD Feature -----------------
+
+@app.get("/plot-details", response_class=HTMLResponse)
+def plot_details_page(request: Request):
+    return templates.TemplateResponse(request=request, name="plot_details.html")
+
+@app.get("/interior-layout", response_class=HTMLResponse)
+def interior_layout_page(request: Request):
+    return templates.TemplateResponse(request=request, name="interior_layout.html")
+
+
+@app.get("/viewer", response_class=HTMLResponse)
+def viewer_page(request: Request):
+    return templates.TemplateResponse(request=request, name="viewer.html")
+
+class LayoutPayload(BaseModel):
+    plots: List[Dict[str, Any]]
+    roads: List[Dict[str, Any]]
+    utilities: Dict[str, List[Dict[str, Any]]]
+
+@app.post("/api/export/dxf")
+def export_dxf(payload: LayoutPayload):
+    doc = ezdxf.new("R2010")
+    msp = doc.modelspace()
+    
+    # Standard CAD Layers
+    doc.layers.add("PLOTS", color=7)      # White/Black
+    doc.layers.add("ROADS", color=8)      # Grey
+    doc.layers.add("WATER", color=5)      # Blue
+    doc.layers.add("SEWAGE", color=12)    # Dark Red/Brown
+    doc.layers.add("ELECTRIC", color=2)   # Yellow
+    
+    for plot in payload.plots:
+        pts = plot.get("points", [])
+        if len(pts) > 2:
+            msp.add_lwpolyline(pts, close=True, dxfattribs={"layer": "PLOTS"})
+            
+    for road in payload.roads:
+        pts = road.get("centerline", [])
+        # We export centerlines for CAD layout. Width can be added as lineweight or offset
+        if pts:
+            msp.add_lwpolyline(pts, dxfattribs={"layer": "ROADS"})
+            
+    # Utilities
+    utils = payload.utilities
+    for w in utils.get("water", []):
+        msp.add_lwpolyline(w.get("path", []), dxfattribs={"layer": "WATER"})
+    for s in utils.get("sewage", []):
+        msp.add_lwpolyline(s.get("path", []), dxfattribs={"layer": "SEWAGE"})
+    for e in utils.get("electric", []):
+        msp.add_lwpolyline(e.get("path", []), dxfattribs={"layer": "ELECTRIC"})
+
+    buf = io.StringIO()
+    doc.write(buf)
+    out_str = buf.getvalue()
+    buf.close()
+    
+    return StreamingResponse(
+        io.BytesIO(out_str.encode('utf-8')), 
+        media_type="application/dxf",
+        headers={"Content-Disposition": "attachment; filename=layout.dxf"}
+    )
+

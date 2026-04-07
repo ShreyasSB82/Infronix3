@@ -326,6 +326,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden;background:#000
     </div>
 
     <div id="india-badge">🇮🇳 India Focus</div>
+    
+    <a href="/viewer" id="btn-cad-viewer" style="background:rgba(96,180,255,0.15); border:1px solid rgba(96,180,255,0.4); color:#60b4ff; padding:.35rem .9rem; border-radius:.4rem; font-size:.8rem; font-weight:600; text-decoration:none; transition:all 0.2s; white-space:nowrap;">📐 Open 3D Viewer</a>
 
     <div id="draw-hint">
       <span>✏️</span><span>Draw a polygon to select land</span>
@@ -610,9 +612,9 @@ function initMap() {
 
   // ── Base layers ───────────────────────────────────────────────
   const darkBase = L.tileLayer(
-    'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     {
-      attribution:'© <a href="https://stadiamaps.com/">Stadia Maps</a> © OpenStreetMap',
+      attribution:'© OpenStreetMap contributors',
       maxZoom:20
     }
   );
@@ -677,7 +679,7 @@ function initMap() {
 
   // ── Layer control ─────────────────────────────────────────────
   const baseMaps = {
-    '🌑 Dark Map': darkBase,
+    '🗺️ OpenStreetMap': darkBase,
     '🛰️ ISRO Bhuvan Satellite': bhuvanSat,
   };
   const overlayMaps = {
@@ -871,10 +873,12 @@ async function doSearch(q) {
 
 
 // ── Plots API ────────────────────────────
+let allPlotsGlobal = [];
 async function loadPlots() {
   try {
     const res = await fetch('/api/plots');
     const plots = await res.json();
+    allPlotsGlobal = plots;
     renderPlots(plots);
   } catch(e) { console.error(e); }
 }
@@ -901,6 +905,7 @@ function renderPlots(plots) {
       </div>
       <div class="pc-actions">
         <button class="btn-xs btn-view" onclick="focusPlot('${p.id}')">View</button>
+        <button class="btn-xs" style="background:rgba(34,197,94,0.15);color:#4ade80;border-color:rgba(34,197,94,0.3)" onclick="openGenerator('${p.id}')">Generate</button>
         <button class="btn-xs btn-del" onclick="deletePlot('${p.id}',true)">Delete</button>
       </div>
     </div>`;
@@ -937,6 +942,13 @@ async function deletePlot(id, removeFromMap) {
     showToast('Plot deleted');
     loadPlots();
   } catch(e) { showToast('Delete failed'); }
+}
+
+function openGenerator(id) {
+    const p = allPlotsGlobal.find(x => x.id === id);
+    if (!p) return;
+    localStorage.setItem('selectedPlot', JSON.stringify(p));
+    window.location.href = '/plot-details';
 }
 
 

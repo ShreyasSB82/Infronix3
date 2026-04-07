@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Infronix | Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="min-h-screen bg-slate-950 text-white">
+  <div class="fixed inset-0 -z-10 bg-gradient-to-b from-slate-900 via-slate-950 to-black"></div>
+  <main class="flex min-h-screen items-center justify-center px-4">
+    <div class="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-7 shadow-2xl backdrop-blur-xl">
+      <h1 class="text-2xl font-bold">Login to Infronix</h1>
+      <p class="mt-2 text-sm text-slate-300">Access the land intelligence dashboard.</p>
+
+      <form id="login-form" class="mt-6 space-y-4">
+        <div>
+          <label for="email" class="mb-1 block text-sm text-slate-300">Email</label>
+          <input id="email" type="email" required
+            class="w-full rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-400" />
+        </div>
+        <div>
+          <label for="password" class="mb-1 block text-sm text-slate-300">Password</label>
+          <input id="password" type="password" minlength="6" required
+            class="w-full rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-sky-400" />
+        </div>
+        <p id="err" class="hidden text-sm text-rose-400">Please enter valid credentials.</p>
+        <button type="submit"
+          class="w-full rounded-lg bg-sky-400 px-4 py-2 font-semibold text-slate-950 hover:bg-sky-300">
+          Continue
+        </button>
+      </form>
+
+      <a href="/" class="mt-4 inline-block text-sm text-slate-300 hover:text-white">Back to landing</a>
+    </div>
+  </main>
+
+  <script>
+    document.getElementById("login-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value.trim();
+      const err = document.getElementById("err");
+      if (!email || password.length < 6) {
+        err.classList.remove("hidden");
+        return;
+      }
+      window.location.href = "/app";
+    });
+  </script>
+</body>
+
+</html>

@@ -1,3 +1,10 @@
 fastapi
 uvicorn[standard]
 httpx
+python-dotenv
+shapely
+pyproj
+numpy
+ezdxf
+pydantic
+jinja2

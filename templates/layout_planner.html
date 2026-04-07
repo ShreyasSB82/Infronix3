@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Layout Planner — Infronix</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; font-family:'Inter',sans-serif; }
+    body { background:#09111f; color:#fff; min-height:100vh; }
+    .container { max-width:900px; margin:0 auto; padding:2rem; }
+    h1 { font-size:1.6rem; margin-bottom:.5rem; color:#60b4ff; }
+    p.sub { color:rgba(255,255,255,.55); margin-bottom:2rem; font-size:.9rem; }
+    .card {
+      background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:.6rem;
+      padding:1.2rem;
+      margin-bottom:1rem;
+    }
+    label { display:block; font-size:.82rem; color:rgba(255,255,255,.7); margin-bottom:.4rem; }
+    input, select {
+      width:100%;
+      padding:.5rem .7rem;
+      background:#13213c;
+      color:#fff;
+      border:1px solid rgba(255,255,255,.15);
+      border-radius:.4rem;
+      font-size:.85rem;
+      margin-bottom:.8rem;
+    }
+    textarea { width:100%; min-height:120px; padding:.5rem .7rem; background:#13213c; color:#fff;
+      border:1px solid rgba(255,255,255,.15); border-radius:.4rem; font-family:monospace; font-size:.8rem; }
+    .btn {
+      display:inline-block;
+      padding:.7rem 1.5rem;
+      border:none;
+      border-radius:.5rem;
+      background:linear-gradient(135deg,#3b82f6,#22c55e);
+      color:#fff;
+      font-weight:700;
+      cursor:pointer;
+      font-size:.9rem;
+      margin-top:.5rem;
+    }
+    .btn:disabled { opacity:.4; cursor:not-allowed; }
+    #results { margin-top:1.5rem; }
+    .layout-card {
+      background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:.5rem;
+      padding:1rem;
+      margin-bottom:.8rem;
+    }
+    .layout-card h3 { font-size:.95rem; color:#60b4ff; margin-bottom:.3rem; }
+    .layout-card .meta { font-size:.78rem; color:rgba(255,255,255,.55); }
+    a.back { color:rgba(255,255,255,.6); font-size:.85rem; text-decoration:none; }
+    a.back:hover { color:#fff; }
+    .view-btn {
+      float: right;
+      padding: .4rem .8rem;
+      font-size: .75rem;
+      background: rgba(96, 180, 255, 0.15);
+      border: 1px solid rgba(96, 180, 255, 0.3);
+      color: #60b4ff;
+      border-radius: .3rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .view-btn:hover {
+      background: #60b4ff;
+      color: #09111f;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a class="back" href="/app">← Back to Map</a>
+    <h1 style="margin-top:1rem">Generative Layout Planner</h1>
+    <p class="sub">Paste your plot GeoJSON and configure preferences to generate multiple diverse layout options using the generative engine.</p>
+
+    <div class="card">
+      <label>Plot GeoJSON (Feature with Polygon geometry)</label>
+      <textarea id="geojson-input" placeholder='{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[...]]]}}'></textarea>
+    </div>
+
+    <div class="card" style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem">
+      <div>
+        <label>Building %</label>
+        <input id="pref-building" type="number" min="1" max="99" value="40">
+      </div>
+      <div>
+        <label>Green %</label>
+        <input id="pref-green" type="number" min="1" max="99" value="30">
+      </div>
+      <div>
+        <label>Parking %</label>
+        <input id="pref-parking" type="number" min="1" max="99" value="20">
+      </div>
+      <div>
+        <label>Utility %</label>
+        <input id="pref-utility" type="number" min="1" max="99" value="10">
+      </div>
+      <div>
+        <label>Setback (m)</label>
+        <input id="con-setback" type="number" min="0.5" max="20" value="3" step="0.5">
+      </div>
+      <div>
+        <label>Road Width (m)</label>
+        <input id="con-road" type="number" min="3" max="30" value="6" step="0.5">
+      </div>
+      <div>
+        <label>Road Facing</label>
+        <select id="con-facing">
+          <option value="south">South</option>
+          <option value="north">North</option>
+          <option value="east">East</option>
+          <option value="west">West</option>
+        </select>
+      </div>
+      <div>
+        <label>Floors</label>
+        <input id="con-floors" type="number" min="1" max="20" value="3">
+      </div>
+    </div>
+
+    <button class="btn" id="gen-btn" onclick="generate()">Generate Layouts</button>
+    <div id="results"></div>
+  </div>
+
+  <script>
+    let currentLayouts = [];
+
+    async function generate() {
+      const btn = document.getElementById('gen-btn');
+      const results = document.getElementById('results');
+      btn.disabled = true;
+      btn.textContent = 'Generating…';
+      results.innerHTML = '';
+      currentLayouts = [];
+
+      let geojson;
+      try {
+        geojson = JSON.parse(document.getElementById('geojson-input').value);
+      } catch {
+        results.innerHTML = '<p style="color:#ff8f8f">Invalid GeoJSON. Please paste a valid Feature.</p>';
+        btn.disabled = false; btn.textContent = 'Generate Layouts';
+        return;
+      }
+
+      const body = {
+        plot_geojson: geojson,
+        preferences: {
+          building: +document.getElementById('pref-building').value,
+          green:    +document.getElementById('pref-green').value,
+          parking:  +document.getElementById('pref-parking').value,
+          utility:  +document.getElementById('pref-utility').value,
+        },
+        constraints: {
+          setback_m:    +document.getElementById('con-setback').value,
+          road_width_m: +document.getElementById('con-road').value,
+          road_facing:  document.getElementById('con-facing').value,
+          num_floors:   +document.getElementById('con-floors').value,
+        },
+        n_layouts: 5,
+      };
+
+      try {
+        const res = await fetch('/api/layout-planner/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Generation failed');
+
+        currentLayouts = data.layouts || [];
+        results.innerHTML = `<p style="color:#7ce0a0;margin-bottom:.8rem">Generated ${data.n_generated} layouts · Plot area: ${data.plot_area_sqm.toFixed(1)} m²</p>`;
+        currentLayouts.forEach((l, i) => {
+          results.innerHTML += `
+            <div class="layout-card">
+              <button class="view-btn" onclick="selectLayout(${i})">View in 3D</button>
+              <h3>${l.strategy || 'Layout'} #${i + 1}</h3>
+              <div class="meta">
+                Score: ${l.score?.toFixed(1) || '—'} ·
+                Building: ${l.stats?.building_sqm?.toFixed(0) || '—'}m² ·
+                Green: ${l.stats?.green_sqm?.toFixed(0) || '—'}m² ·
+                Parking: ${l.stats?.parking_sqm?.toFixed(0) || '—'}m²
+              </div>
+            </div>`;
+        });
+      } catch (e) {
+        results.innerHTML = `<p style="color:#ff8f8f">${e.message}</p>`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Generate Layouts';
+      }
+    }
+
+    function selectLayout(idx) {
+      const layout = currentLayouts[idx];
+      if (!layout) return;
+      localStorage.setItem("generatedSitePlan", JSON.stringify(layout));
+      window.location.href = "/viewer";
+    }
+  </script>
+</body>
+</html>

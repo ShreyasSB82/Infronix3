@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interior Layout — UrbanScribe</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: radial-gradient(circle at top, #1a2948, #0b1120 60%);
+            color: #fff;
+            min-height: 100vh
+        }
+
+        .wrap {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 28px 18px
+        }
+
+        .head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px
+        }
+
+        .title {
+            font-size: 1.5rem;
+            font-weight: 800
+        }
+
+        .sub {
+            font-size: .9rem;
+            color: rgba(255, 255, 255, .65);
+            margin-top: 4px
+        }
+
+        .btn {
+            border: 1px solid rgba(255, 255, 255, .2);
+            background: rgba(255, 255, 255, .08);
+            color: #fff;
+            padding: .55rem .9rem;
+            border-radius: .45rem;
+            cursor: pointer
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 14px
+        }
+
+        .card {
+            background: rgba(255, 255, 255, .06);
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: .7rem;
+            padding: 14px
+        }
+
+        .card h3 {
+            font-size: .95rem;
+            margin-bottom: 10px
+        }
+
+        .field {
+            margin-bottom: 10px
+        }
+
+        .field label {
+            display: block;
+            font-size: .78rem;
+            color: rgba(255, 255, 255, .72);
+            margin-bottom: 4px
+        }
+
+        .field select,
+        .field input {
+            width: 100%;
+            padding: .5rem .6rem;
+            background: #15233f;
+            border: 1px solid rgba(255, 255, 255, .15);
+            border-radius: .45rem;
+            color: #fff
+        }
+
+        #generate {
+            width: 100%;
+            padding: .7rem;
+            border: none;
+            border-radius: .5rem;
+            background: linear-gradient(135deg, #3b82f6, #22c55e);
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 12px
+        }
+
+        .stat {
+            background: rgba(255, 255, 255, .05);
+            border: 1px solid rgba(255, 255, 255, .1);
+            border-radius: .5rem;
+            padding: 10px
+        }
+
+        .k {
+            font-size: .72rem;
+            color: rgba(255, 255, 255, .55)
+        }
+
+        .v {
+            font-size: 1.05rem;
+            color: #9fd1ff;
+            font-weight: 700
+        }
+
+        .rooms {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px
+        }
+
+        .room {
+            background: #13213b;
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: .5rem;
+            padding: 10px
+        }
+
+        .room h4 {
+            font-size: .85rem;
+            margin-bottom: 3px
+        }
+
+        .room p {
+            font-size: .75rem;
+            color: rgba(255, 255, 255, .65)
+        }
+
+        .floor {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, .1)
+        }
+
+        .floor h5 {
+            font-size: .8rem;
+            color: #b9dcff;
+            margin-bottom: 8px
+        }
+
+        @media (max-width:900px) {
+            .grid {
+                grid-template-columns: 1fr
+            }
+
+            .stats {
+                grid-template-columns: 1fr 1fr
+            }
+
+            .rooms {
+                grid-template-columns: 1fr
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <div class="head">
+            <div>
+                <div class="title">Interior Layout Planner</div>
+                <div class="sub">Non-map layout generated from building footprint only.</div>
+            </div>
+            <button class="btn" onclick="window.location.href='/plot-details'">← Back To Plot Details</button>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>Interior Preferences</h3>
+                <div class="field">
+                    <label>Layout Style</label>
+                    <select id="style">
+                        <option value="modern">Modern</option>
+                        <option value="compact">Compact</option>
+                        <option value="luxury">Luxury</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Bedrooms</label>
+                    <input id="bedrooms" type="number" min="1" max="8" value="3" />
+                </div>
+                <div class="field">
+                    <label>Bathrooms</label>
+                    <input id="bathrooms" type="number" min="1" max="6" value="2" />
+                </div>
+                <div class="field">
+                    <label>Need Study Room</label>
+                    <select id="study">
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                    </select>
+                </div>
+                <button id="generate">Generate Interior Layout</button>
+            </div>
+
+            <div class="card">
+                <h3>Generated Interior Plan</h3>
+                <div class="stats">
+                    <div class="stat">
+                        <div class="k">Building Area</div>
+                        <div class="v" id="building-area">-</div>
+                    </div>
+                    <div class="stat">
+                        <div class="k">Total Built-Up</div>
+                        <div class="v" id="builtup-area">-</div>
+                    </div>
+                    <div class="stat">
+                        <div class="k">Floors</div>
+                        <div class="v" id="floors">-</div>
+                    </div>
+                </div>
+                <div id="layout-output"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sitePlan = null;
+
+        function roomCard(name, area, note) {
+            return `<div class="room"><h4>${name} · ${area.toFixed(1)} m²</h4><p>${note}</p></div>`;
+        }
+
+        function generateInterior() {
+            if (!sitePlan || !sitePlan.stats) return;
+            const building = sitePlan.stats.building_sqm || 0;
+            const floors = sitePlan.num_floors || 1;
+            const bedrooms = Math.max(1, +document.getElementById('bedrooms').value || 1);
+            const bathrooms = Math.max(1, +document.getElementById('bathrooms').value || 1);
+            const study = document.getElementById('study').value === 'yes';
+            const style = document.getElementById('style').value;
+
+            const perFloor = building / floors;
+            const livingPct = style === 'luxury' ? 0.26 : style === 'compact' ? 0.20 : 0.23;
+            const kitchenPct = style === 'compact' ? 0.10 : 0.12;
+            const circulationPct = 0.14;
+            const servicePct = 0.10;
+            let allocLeft = perFloor * (1 - livingPct - kitchenPct - circulationPct - servicePct);
+
+            const bedArea = allocLeft * 0.6 / bedrooms;
+            const bathArea = allocLeft * 0.25 / bathrooms;
+            const studyArea = study ? allocLeft * 0.15 : 0;
+            if (!study) allocLeft += allocLeft * 0.15;
+
+            let html = '';
+            for (let f = 1; f <= floors; f++) {
+                html += `<div class="floor"><h5>Floor ${f}</h5><div class="rooms">`;
+                html += roomCard('Living / Family', perFloor * livingPct, 'Main shared area');
+                html += roomCard('Kitchen + Dining', perFloor * kitchenPct, 'Cooking + dining');
+                for (let i = 1; i <= bedrooms; i++) html += roomCard(`Bedroom ${i}`, bedArea, 'Private sleeping space');
+                for (let i = 1; i <= bathrooms; i++) html += roomCard(`Bathroom ${i}`, bathArea, 'Attached/common bath');
+                if (study) html += roomCard('Study / Office', studyArea, 'Quiet work area');
+                html += roomCard('Circulation', perFloor * circulationPct, 'Stairs, lobby, passage');
+                html += roomCard('Utility / Storage', perFloor * servicePct, 'Storage, wash, service');
+                html += `</div></div>`;
+            }
+
+            document.getElementById('layout-output').innerHTML = html;
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const raw = localStorage.getItem('generatedSitePlan');
+            if (!raw) {
+                document.getElementById('layout-output').innerHTML = '<p style="color:#ffb4b4">No site plan data found. Generate a site plan first.</p>';
+                return;
+            }
+            sitePlan = JSON.parse(raw);
+            document.getElementById('building-area').textContent = (sitePlan.stats.building_sqm || 0).toFixed(1) + ' m²';
+            document.getElementById('builtup-area').textContent = (sitePlan.stats.total_built_up_sqm || 0).toFixed(1) + ' m²';
+            document.getElementById('floors').textContent = String(sitePlan.num_floors || 1);
+            document.getElementById('generate').addEventListener('click', generateInterior);
+            generateInterior();
+        });
+    </script>
+</body>
+
+</html>

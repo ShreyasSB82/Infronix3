@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UrbanScribe — Infronix</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; font-family:'Inter',sans-serif; }
+    body { background:#09111f; color:#fff; height:100vh; display:flex; align-items:center; justify-content:center; }
+    .card {
+      text-align:center;
+      background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:.75rem;
+      padding:3rem 4rem;
+      backdrop-filter:blur(12px);
+    }
+    h1 { font-size:2rem; background:linear-gradient(90deg,#60b4ff,#9f7aea); -webkit-background-clip:text; color:transparent; margin-bottom:.5rem; }
+    p { color:rgba(255,255,255,.6); margin-bottom:1.5rem; font-size:.95rem; }
+    .links { display:flex; gap:1rem; justify-content:center; }
+    a {
+      padding:.7rem 1.6rem;
+      border-radius:.5rem;
+      text-decoration:none;
+      font-weight:600;
+      font-size:.85rem;
+      transition:all .2s;
+    }
+    .primary { background:linear-gradient(135deg,#4facfe,#00f2fe); color:#000; }
+    .primary:hover { transform:translateY(-2px); box-shadow:0 4px 20px rgba(79,172,254,.3); }
+    .ghost { border:1px solid rgba(255,255,255,.2); color:#fff; }
+    .ghost:hover { background:rgba(255,255,255,.08); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>UrbanScribe</h1>
+    <p>AI-powered urban planning engine.<br>Select a plot from the map, then generate compliant site plans.</p>
+    <div class="links">
+      <a href="/app" class="primary">Open Map</a>
+      <a href="/plot-details" class="ghost">Plot Details</a>
+      <a href="/viewer" class="ghost">3D Viewer</a>
+    </div>
+  </div>
+</body>
+</html>

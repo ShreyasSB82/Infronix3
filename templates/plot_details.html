@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plot Details — UrbanScribe</title>
+    <link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #09111f;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden
+        }
+
+        #app {
+            display: flex;
+            height: 100vh
+        }
+
+        #map {
+            flex: 1;
+            min-width: 0
+        }
+
+        #panel {
+            width: 380px;
+            background: #0f1a30;
+            border-left: 1px solid rgba(255, 255, 255, .08);
+            padding: 18px;
+            overflow: auto
+        }
+
+        h1 {
+            font-size: 1.1rem;
+            margin-bottom: 6px
+        }
+
+        .sub {
+            font-size: .82rem;
+            color: rgba(255, 255, 255, .55);
+            margin-bottom: 14px;
+            line-height: 1.5
+        }
+
+        .card {
+            background: rgba(255, 255, 255, .04);
+            border: 1px solid rgba(255, 255, 255, .08);
+            border-radius: .55rem;
+            padding: 12px;
+            margin-bottom: 12px
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px
+        }
+
+        .row:last-child {
+            margin-bottom: 0
+        }
+
+        .lbl {
+            font-size: .82rem;
+            color: rgba(255, 255, 255, .7)
+        }
+
+        .val {
+            font-size: .82rem;
+            color: #9fd1ff;
+            font-family: monospace
+        }
+
+        .field {
+            margin-bottom: 12px
+        }
+
+        .field label {
+            display: flex;
+            justify-content: space-between;
+            font-size: .8rem;
+            color: rgba(255, 255, 255, .8);
+            margin-bottom: 5px
+        }
+
+        input[type=range] {
+            width: 100%
+        }
+
+        .total-ok {
+            color: #7ce0a0
+        }
+
+        .total-bad {
+            color: #ff8f8f
+        }
+
+        #generate-btn {
+            width: 100%;
+            padding: .7rem;
+            border: none;
+            border-radius: .5rem;
+            background: linear-gradient(135deg, #3b82f6, #22c55e);
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer
+        }
+
+        #generate-btn:disabled {
+            opacity: .45;
+            cursor: not-allowed
+        }
+
+        #viewer-btn {
+            width: 100%;
+            padding: .65rem;
+            border: 1px solid rgba(255, 255, 255, .2);
+            border-radius: .5rem;
+            background: rgba(255, 255, 255, .06);
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+            display: none
+        }
+
+        #viewer-btn.show {
+            display: block
+        }
+
+        #legend {
+            margin-top: 12px
+        }
+
+        .leg {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            margin-bottom: 6px;
+            font-size: .78rem;
+            color: rgba(255, 255, 255, .7)
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px
+        }
+
+        .layout-option {
+            margin-top: 8px;
+            padding: 8px;
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: .45rem;
+            background: rgba(255, 255, 255, .04)
+        }
+
+        .layout-option h4 {
+            font-size: .82rem;
+            margin-bottom: 5px
+        }
+
+        .layout-meta {
+            font-size: .72rem;
+            color: rgba(255, 255, 255, .65);
+            margin-bottom: 6px
+        }
+
+        .pick-btn {
+            padding: .3rem .55rem;
+            border: 1px solid rgba(96, 180, 255, .4);
+            background: rgba(96, 180, 255, .15);
+            color: #9fd1ff;
+            border-radius: .35rem;
+            cursor: pointer;
+            font-size: .72rem
+        }
+
+        #toast {
+            position: fixed;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%) translateY(70px);
+            background: #0f1a30;
+            border: 1px solid rgba(96, 180, 255, .35);
+            padding: .45rem .95rem;
+            border-radius: .45rem;
+            font-size: .8rem;
+            transition: transform .25s
+        }
+
+        #toast.show {
+            transform: translateX(-50%) translateY(0)
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div id="map"></div>
+        <aside id="panel">
+            <h1>Plot Preferences</h1>
+            <p class="sub">Set your site split for planning. Total must be 100% before generating.</p>
+
+            <div class="card">
+                <div class="row"><span class="lbl">Selected Plot</span><span class="val" id="plot-name">-</span></div>
+                <div class="row"><span class="lbl">Plot Area</span><span class="val" id="plot-area">-</span></div>
+                <div class="row"><span class="lbl">Road Facing</span>
+                    <select id="road-facing"
+                        style="background:#13213c;color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:.35rem;padding:.2rem .4rem">
+                        <option value="south">South</option>
+                        <option value="north">North</option>
+                        <option value="east">East</option>
+                        <option value="west">West</option>
+                    </select>
+                </div>
+                <div class="row"><span class="lbl">Floors</span><input id="floors" type="number" min="1" max="20"
+                        value="3"
+                        style="width:72px;background:#13213c;color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:.35rem;padding:.2rem .4rem" />
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="field">
+                    <label><span>Building</span><span id="v-building">60%</span></label>
+                    <input id="s-building" type="range" min="0" max="100" value="60" />
+                </div>
+                <div class="field">
+                    <label><span>Greenery</span><span id="v-greenery">20%</span></label>
+                    <input id="s-greenery" type="range" min="0" max="100" value="20" />
+                </div>
+                <div class="field">
+                    <label><span>Parking</span><span id="v-parking">10%</span></label>
+                    <input id="s-parking" type="range" min="0" max="100" value="10" />
+                </div>
+                <div class="field">
+                    <label><span>Utility</span><span id="v-utility">10%</span></label>
+                    <input id="s-utility" type="range" min="0" max="100" value="10" />
+                </div>
+                <div class="row">
+                    <span class="lbl">Total</span>
+                    <span class="val total-ok" id="total">100%</span>
+                </div>
+            </div>
+
+            <button id="generate-btn">Generate Plan</button>
+            <button id="viewer-btn">Open 3D Viewer</button>
+            <div id="layout-options"></div>
+
+            <div id="legend">
+                <div class="leg"><span class="dot" style="background:#4A90D9"></span>Building</div>
+                <div class="leg"><span class="dot" style="background:#5cb85c"></span>Greenery</div>
+                <div class="leg"><span class="dot" style="background:#9B9B9B"></span>Parking</div>
+                <div class="leg"><span class="dot" style="background:#c0692a"></span>Utility</div>
+            </div>
+        </aside>
+    </div>
+    <div id="toast"></div>
+
+    <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+    <script>
+        let map;
+        let selectedPlot = null;
+        let toastTimer;
+        let selectedGeneratedLayout = null;
+
+        function toast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg; t.classList.add('show');
+            clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+        }
+
+        function getSplit() {
+            return {
+                building: +document.getElementById('s-building').value,
+                greenery: +document.getElementById('s-greenery').value,
+                parking: +document.getElementById('s-parking').value,
+                utility: +document.getElementById('s-utility').value,
+            };
+        }
+
+        function updateTotals() {
+            const s = getSplit();
+            document.getElementById('v-building').textContent = s.building + '%';
+            document.getElementById('v-greenery').textContent = s.greenery + '%';
+            document.getElementById('v-parking').textContent = s.parking + '%';
+            document.getElementById('v-utility').textContent = s.utility + '%';
+            const total = s.building + s.greenery + s.parking + s.utility;
+            const totalEl = document.getElementById('total');
+            totalEl.textContent = total + '%';
+            totalEl.className = 'val ' + (total === 100 ? 'total-ok' : 'total-bad');
+            document.getElementById('generate-btn').disabled = total !== 100 || !selectedPlot;
+        }
+
+        function addLayer(id, data, type, paint) {
+            if (map.getLayer(id)) map.removeLayer(id);
+            if (map.getSource(id)) map.removeSource(id);
+            map.addSource(id, { type: 'geojson', data });
+            map.addLayer({ id, type, source: id, paint });
+        }
+
+        function renderSelectedPlot() {
+            const feature = {
+                type: 'Feature',
+                geometry: { type: 'Polygon', coordinates: [selectedPlot.coordinates.map(c => [c[1], c[0]])] },
+                properties: { name: selectedPlot.name || 'Selected Plot' },
+            };
+            addLayer('selected-plot-fill', feature, 'fill', { 'fill-color': '#60b4ff', 'fill-opacity': 0.13 });
+            addLayer('selected-plot-line', feature, 'line', { 'line-color': '#60b4ff', 'line-width': 2 });
+            const bounds = feature.geometry.coordinates[0].reduce((b, c) => {
+                b[0] = Math.min(b[0], c[0]); b[1] = Math.min(b[1], c[1]);
+                b[2] = Math.max(b[2], c[0]); b[3] = Math.max(b[3], c[1]); return b;
+            }, [Infinity, Infinity, -Infinity, -Infinity]);
+            map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 70 });
+        }
+
+        async function generatePlan() {
+            if (!selectedPlot) return;
+            const split = getSplit();
+            const payload = {
+                plot_geojson: {
+                    type: 'Feature',
+                    geometry: { type: 'Polygon', coordinates: [selectedPlot.coordinates.map(c => [c[1], c[0]])] },
+                    properties: {},
+                },
+                split,
+                road_facing: document.getElementById('road-facing').value,
+                num_floors: +document.getElementById('floors').value || 3,
+            };
+            try {
+                const res = await fetch('/api/site-plan/preferences-generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Could not generate site plan');
+
+                document.getElementById('plot-area').textContent = data.plot_area_sqm.toFixed(1) + ' m²';
+                renderLayoutOptions(data.layouts || [], split, payload);
+                toast('3 layout options generated');
+            } catch (e) {
+                toast(e.message || 'Generation failed');
+            }
+        }
+
+        function renderLayoutOptions(layouts, split, payload) {
+            const wrap = document.getElementById('layout-options');
+            if (!layouts.length) {
+                wrap.innerHTML = '<div class="layout-meta">No layouts generated.</div>';
+                return;
+            }
+            wrap.innerHTML = layouts.map((l, i) => `
+    <div class="layout-option">
+      <h4>${l.name} Layout</h4>
+      <div class="layout-meta">
+        Building: ${(l.stats?.building_sqm || 0).toFixed(1)} m² ·
+        Greenery: ${(l.stats?.greenery_sqm || 0).toFixed(1)} m² ·
+        Parking: ${(l.stats?.parking_sqm || 0).toFixed(1)} m²
+      </div>
+      <button class="pick-btn" data-i="${i}">Select This Layout</button>
+    </div>
+  `).join('');
+            wrap.querySelectorAll('.pick-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const idx = +btn.dataset.i;
+                    const picked = layouts[idx];
+                    selectedGeneratedLayout = picked;
+                    const fc = picked.zones;
+                    addLayer('zones-fill', fc, 'fill', { 'fill-color': ['get', 'color'], 'fill-opacity': 0.44 });
+                    addLayer('zones-line', fc, 'line', { 'line-color': '#ffffff', 'line-width': 1, 'line-opacity': 0.35 });
+                    localStorage.setItem('generatedSitePlan', JSON.stringify({
+                        selectedPlot,
+                        split,
+                        road_facing: payload.road_facing,
+                        num_floors: payload.num_floors,
+                        stats: picked.stats,
+                        zones: picked.zones,
+                        layout_name: picked.name,
+                    }));
+                    document.getElementById('viewer-btn').classList.add('show');
+                    toast(`${picked.name} layout selected`);
+                });
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            map = new maplibregl.Map({
+                container: 'map',
+                style: {
+                    version: 8,
+                    sources: {},
+                    layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#0b1427' } }],
+                    glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
+                    sprite: 'https://demotiles.maplibre.org/styles/osm-bright-gl-style/sprite'
+                },
+                center: [78.9629, 20.5937],
+                zoom: 5,
+            });
+
+            map.on('load', () => {
+                map.addSource('base-dark', {
+                    type: 'raster',
+                    tiles: ['https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png'],
+                    tileSize: 256
+                });
+                map.addLayer({ id: 'base-dark-layer', type: 'raster', source: 'base-dark' });
+
+                const raw = localStorage.getItem('selectedPlot');
+                if (!raw) {
+                    toast('No selected plot found. Please select a plot first.');
+                    return;
+                }
+                selectedPlot = JSON.parse(raw);
+                document.getElementById('plot-name').textContent = selectedPlot.name || 'Selected Plot';
+                renderSelectedPlot();
+                updateTotals();
+            });
+
+            ['s-building', 's-greenery', 's-parking', 's-utility'].forEach(id => {
+                document.getElementById(id).addEventListener('input', updateTotals);
+            });
+            document.getElementById('generate-btn').addEventListener('click', generatePlan);
+            document.getElementById('viewer-btn').addEventListener('click', () => {
+                window.location.href = '/viewer';
+            });
+            updateTotals();
+        });
+    </script>
+</body>
+
+</html>
