@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -25,6 +26,7 @@ app.include_router(site_plan_router,      prefix="/api/site-plan")
 app.include_router(layout_planner_router, prefix="/api/layout-planner")
 app.include_router(interior_router,       prefix="/api/interior")
 
+app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
 
 # ─── Config endpoint (Mapbox token from .env) ─────────────────────────────────
 @app.get("/api/config")
@@ -35,57 +37,57 @@ async def config():
 # ─── Page routes ──────────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    return Path("templates/landing.html").read_text()
+    return Path("frontend/dist/index.html").read_text(encoding="utf-8")
 
 
 @app.get("/landing", response_class=HTMLResponse)
 async def landing():
-    return Path("templates/landing.html").read_text()
+    return Path("frontend/dist/index.html").read_text(encoding="utf-8")
 
 
 @app.get("/app", response_class=HTMLResponse)
 async def app_page():
-    return Path("templates/urbanscribe.html").read_text()
+    return Path("templates/urbanscribe.html").read_text(encoding="utf-8")
 
 
 @app.get("/index", response_class=HTMLResponse)
 async def index_page():
-    return Path("templates/index.html").read_text()
+    return Path("templates/index.html").read_text(encoding="utf-8")
 
 
 @app.get("/urbanscribe", response_class=HTMLResponse)
 async def urbanscribe():
-    return Path("templates/urbanscribe.html").read_text()
+    return Path("templates/urbanscribe.html").read_text(encoding="utf-8")
 
 
 @app.get("/login", response_class=HTMLResponse)
 async def login():
-    return Path("templates/login.html").read_text()
+    return Path("templates/login.html").read_text(encoding="utf-8")
 
 
 @app.get("/plot-details", response_class=HTMLResponse)
 async def plot_details():
-    return Path("templates/plot_details.html").read_text()
+    return Path("templates/plot_details.html").read_text(encoding="utf-8")
 
 
 @app.get("/smart-tower", response_class=HTMLResponse)
 async def smart_tower():
-    return Path("templates/smart_tower.html").read_text()
+    return Path("templates/smart_tower.html").read_text(encoding="utf-8")
 
 
 @app.get("/interior-layout", response_class=HTMLResponse)
 async def interior_layout():
-    return Path("templates/interior_layout.html").read_text()
+    return Path("templates/interior_layout.html").read_text(encoding="utf-8")
 
 
 @app.get("/layout-planner", response_class=HTMLResponse)
 async def layout_planner():
-    return Path("templates/layout_planner.html").read_text()
+    return Path("templates/layout_planner.html").read_text(encoding="utf-8")
 
 
 @app.get("/viewer", response_class=HTMLResponse)
 async def viewer():
-    return Path("templates/viewer.html").read_text()
+    return Path("templates/viewer.html").read_text(encoding="utf-8")
 
 
 # ─── LandMark plot storage (existing) ─────────────────────────────────────────

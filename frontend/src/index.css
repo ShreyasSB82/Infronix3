@@ -1,0 +1,445 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital@1&display=swap');
+
+:root {
+  --bg-color: #F4F4F6;
+  --text-main: #1A1A1A;
+  --text-muted: #5A5A5C;
+  --accent-color: #2F3240;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body,
+html {
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  font-family: 'Outfit', sans-serif;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+.lusion-app-container {
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.cursor-glow-light {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 400px;
+  height: 400px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0) 60%);
+  pointer-events: none;
+  z-index: 5;
+  mix-blend-mode: overlay;
+  transform: translate(-50%, -50%);
+  margin-left: -200px;
+  margin-top: -200px;
+}
+
+/* Top Header */
+.lusion-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 3rem;
+  z-index: 100;
+}
+
+.lusion-logo {
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  flex: 1;
+}
+
+.header-aesthetic-text {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 1.25rem;
+  font-weight: 400;
+  line-height: 1.35;
+  color: #444;
+  white-space: nowrap;
+  text-align: left;
+  letter-spacing: 0.2px;
+}
+
+.lusion-nav {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+}
+
+.nav-btn-action {
+  height: 44px;
+  border-radius: 22px;
+  background: #111;
+  color: #fff;
+  border: none;
+  padding: 0 2.2rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+}
+
+.nav-btn-action:hover {
+  background: #2db2ff;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 25px rgba(45, 178, 255, 0.3);
+}
+
+/* Main Canvas Wrapper */
+.lusion-main {
+  position: relative;
+  padding: 0 3rem;
+  margin-top: 100px;
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+
+/* WebGL MAPLIBRE CONTAINER */
+.lusion-canvas-container {
+  width: 100%;
+  height: 70vh;
+  border-radius: 24px;
+  background: #E8ECEF;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.06);
+}
+
+/* MapLibre specific border rendering */
+.maplibregl-map {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 24px;
+}
+
+/* Floating High-Tech Analytics HUD */
+.city-stats-panel {
+  position: absolute;
+  right: 20px;
+  top: 20px;
+  bottom: 20px;
+  width: 320px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 1.8rem 1.5rem;
+  overflow-y: auto;
+  pointer-events: auto;
+  /* Allow scrolling inside */
+  font-family: inherit;
+  z-index: 50;
+}
+
+.stat-group {
+  margin-bottom: 1rem;
+}
+
+.stat-label {
+  font-size: 0.72rem;
+  color: #888;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.3rem;
+}
+
+.stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #111;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stat-bar-container {
+  width: 100%;
+  height: 8px;
+  background: #EAEAEF;
+  border-radius: 4px;
+  margin-top: 0.5rem;
+  overflow: hidden;
+}
+
+.stat-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease-out, background 0.3s;
+}
+
+.mini-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.lusion-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #555;
+}
+
+.scroll-text {
+  letter-spacing: 0.5px;
+  font-size: 0.8rem;
+}
+
+/* DYNAMIC SCROLLING LAYOUT */
+.dynamic-scroll-wrapper {
+  position: relative;
+  width: 100%;
+  padding-bottom: 250px;
+}
+
+.winding-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.scroll-section {
+  position: relative;
+  z-index: 10;
+  padding: 0 4rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.massive-text-section {
+  margin-top: 6rem;
+  margin-bottom: 6rem;
+}
+
+.massive-text-section h1 {
+  font-size: 8.5rem;
+  font-weight: 400;
+  line-height: 0.95;
+  letter-spacing: -3.5px;
+  color: #111;
+  max-width: 1100px;
+}
+
+.split-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-top: 5rem;
+  position: relative;
+}
+
+.left-column {
+  width: 55%;
+  display: flex;
+  flex-direction: column;
+  gap: 8rem;
+  z-index: 5;
+}
+
+.right-column {
+  width: 35%;
+  position: sticky;
+  top: 15vh;
+  padding-right: 2rem;
+  z-index: 10;
+}
+
+.desc-text {
+  font-size: 1.5rem;
+  line-height: 1.45;
+  font-weight: 400;
+  color: #222;
+  margin-bottom: 3rem;
+}
+
+.approach-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1.1rem 1.8rem;
+  background: white;
+  border-radius: 30px;
+  border: none;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: #111;
+  transition: transform 0.3s;
+}
+
+.approach-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.1);
+}
+
+.approach-btn .dot {
+  width: 7px;
+  height: 7px;
+  background: #111;
+  border-radius: 50%;
+}
+
+.media-card {
+  width: 100%;
+  border-radius: 20px;
+  position: relative;
+  box-shadow: 0 40px 80px rgba(45, 80, 250, 0.15);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.blue-card-1 {
+  height: 550px;
+  background: linear-gradient(135deg, rgba(42, 69, 254, 0.9) 0%, rgba(104, 52, 250, 0.9) 100%);
+  margin-left: -5%;
+}
+
+.blue-card-2 {
+  height: 650px;
+  background: linear-gradient(135deg, rgba(135, 146, 255, 0.9) 0%, rgba(56, 88, 246, 0.9) 100%);
+  margin-left: 15%;
+  margin-top: -100px;
+  z-index: 5;
+}
+
+.card-mock-content {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 60%), linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 100% 100%, 40px 40px;
+  opacity: 0.5;
+}
+
+.card-mock-content-2 {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(ellipse at 80% 20%, rgba(255, 255, 255, 0.2) 0%, transparent 50%);
+}
+
+@media (max-width: 1024px) {
+  .split-section {
+    flex-direction: column;
+    gap: 4rem;
+  }
+
+  .left-column,
+  .right-column {
+    width: 100%;
+  }
+
+  .right-column {
+    position: relative;
+    top: 0;
+  }
+
+  .massive-text-section h1 {
+    font-size: 5rem;
+  }
+
+  .lusion-main {
+    margin-top: 120px;
+  }
+}
+
+/* Final Dark Footer */
+.final-dark-footer {
+  background: #111;
+  color: #fff;
+  padding: 6rem 5rem 3rem 5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.footer-upper {
+  margin-bottom: 4rem;
+}
+
+.equinox-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+  color: #fff;
+  text-transform: uppercase;
+}
+
+.footer-middle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6rem;
+}
+
+.footer-middle h1 {
+  font-size: 3.5rem;
+  font-weight: 400;
+  letter-spacing: -1px;
+  margin: 0;
+  color: #fff;
+}
+
+.footer-progress-bar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.progress-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.progress-fill { width: 35px; height: 3px; background: #cafa0a; }
+.progress-track { width: 90px; height: 3px; background: #333; }
+.arrow-icon { font-size: 1.2rem; color: #fff; }
+
+.footer-crosses {
+  display: flex;
+  justify-content: space-between;
+  color: #fff;
+  font-size: 1.2rem;
+  padding-top: 2.5rem;
+  border-top: 1px solid #222;
+}
