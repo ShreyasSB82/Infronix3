@@ -18,6 +18,11 @@ from app.api.routes.site_plan import router as site_plan_router
 from app.api.routes.layout_planner import router as layout_planner_router
 # Interior floor plan generator
 from app.api.routes.interior import router as interior_router
+# CAD / DXF export
+from app.api.routes.export_cad import router as export_cad_router
+# BBMP Compliance & Infra Clearance
+from app.api.routes.compliance import router as compliance_router
+from app.api.routes.clearance import router as clearance_router
 
 app = FastAPI(title="LandMark + UrbanScribe + Layout Planner")
 
@@ -25,8 +30,21 @@ app = FastAPI(title="LandMark + UrbanScribe + Layout Planner")
 app.include_router(site_plan_router,      prefix="/api/site-plan")
 app.include_router(layout_planner_router, prefix="/api/layout-planner")
 app.include_router(interior_router,       prefix="/api/interior")
+app.include_router(export_cad_router,     prefix="/api/export")
+app.include_router(compliance_router,     prefix="/api")
+app.include_router(clearance_router,      prefix="/api")
 
-app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
+DIST_DIR = Path("frontend/dist")
+ASSETS_DIR = DIST_DIR / "assets"
+STATIC_DIR = Path("static")
+STATIC_DIR.mkdir(exist_ok=True)
+
+if ASSETS_DIR.exists():
+    # Mount assets from React build
+    app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
+
+# Mount general static files (for 3D generation modules)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ─── Config endpoint (Mapbox token from .env) ─────────────────────────────────
 @app.get("/api/config")
@@ -34,15 +52,36 @@ async def config():
     return {"ok": True}   # no API keys required — tiles are from free sources
 
 
+# ─── Fix 404s ─────────────────────────────────────────────────────────────────
+@app.post("/priority")
+async def priority_fallback():
+    return {"status": "ok"}
+
+
+@app.get("/favicon.svg")
+async def favicon():
+    fav = ASSETS_DIR.parent / "favicon.svg"
+    if fav.exists():
+        return HTMLResponse(fav.read_text())
+    return HTMLResponse('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#2db2ff"/></svg>')
+
+
 # ─── Page routes ──────────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    return Path("frontend/dist/index.html").read_text(encoding="utf-8")
+    index_file = DIST_DIR / "index.html"
+    if index_file.exists():
+        return index_file.read_text(encoding="utf-8")
+    # Fallback if frontent not built
+    return Path("templates/index.html").read_text(encoding="utf-8")
 
 
 @app.get("/landing", response_class=HTMLResponse)
 async def landing():
-    return Path("frontend/dist/index.html").read_text(encoding="utf-8")
+    index_file = DIST_DIR / "index.html"
+    if index_file.exists():
+        return index_file.read_text(encoding="utf-8")
+    return "<h1>Landing Page</h1><p>Frontend not built.</p>"
 
 
 @app.get("/app", response_class=HTMLResponse)

@@ -10,53 +10,22 @@
 <!-- Leaflet Draw -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
 
+<link rel="stylesheet" href="/static/css/unified-header.css">
+<script src="/static/js/unified-header.js?v=20260408" defer></script>
+
 <style>
 /* ─── Reset ─────────────────────────────────────────────────── */
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden;background:#000;color:#fff}
 
-/* ─── Earth View ─────────────────────────────────────────────── */
-#earth-view{
-  position:fixed;inset:0;z-index:20;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  transition:opacity .9s ease,transform .9s ease;
-}
-#earth-view.exit{opacity:0;transform:scale(1.6);pointer-events:none}
-#three-canvas{position:absolute;inset:0;cursor:pointer}
-
-.hero{position:relative;z-index:2;text-align:center;pointer-events:none}
-.hero h1{
-  font-size:clamp(2.4rem,5vw,4rem);font-weight:800;letter-spacing:3px;
-  background:linear-gradient(135deg,#60b4ff 0%,#a8d8a8 60%,#ffd580 100%);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-  background-clip:text;
-  margin-bottom:.5rem;
-}
-.hero p{font-size:1.1rem;color:rgba(255,255,255,.55);margin-bottom:2.5rem;letter-spacing:.5px}
-.cta{
-  display:inline-block;
-  border:1px solid rgba(96,180,255,.5);
-  background:rgba(96,180,255,.08);
-  color:rgba(255,255,255,.85);
-  padding:.7rem 2rem;border-radius:2rem;font-size:.95rem;cursor:pointer;
-  backdrop-filter:blur(6px);pointer-events:all;
-  animation:glowpulse 2.4s ease-in-out infinite;
-  transition:background .2s,border-color .2s;
-  user-select:none;
-}
-.cta:hover{background:rgba(96,180,255,.18);border-color:rgba(96,180,255,.9)}
-@keyframes glowpulse{
-  0%,100%{box-shadow:0 0 0 rgba(96,180,255,0)}
-  50%{box-shadow:0 0 18px rgba(96,180,255,.35)}
-}
 
 /* ─── Map View ───────────────────────────────────────────────── */
 #map-view{
   position:fixed;inset:0;z-index:10;
-  opacity:0;pointer-events:none;
-  transition:opacity .8s ease;
+  display: block;
+  opacity:1;
+  pointer-events:all;
 }
-#map-view.show{opacity:1;pointer-events:all}
 
 #map{position:absolute;inset:0;background:#1a2540}
 
@@ -301,22 +270,11 @@ body{font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden;background:#000
 </head>
 <body>
 
-<!-- ═══════════ EARTH VIEW ═══════════ -->
-<div id="earth-view">
-  <canvas id="three-canvas"></canvas>
-  <div class="hero">
-    <h1>LandMark</h1>
-    <p>Select, claim, and manage plots of land worldwide</p>
-    <div class="cta" id="explore-btn">🌍&nbsp;&nbsp;Click to Explore</div>
-  </div>
-</div>
-
 <!-- ═══════════ MAP VIEW ═══════════ -->
-<div id="map-view">
+<div id="map-view" class="show">
 
   <!-- top bar -->
   <div id="topbar">
-    <button id="back-btn" onclick="goHome()">← Globe</button>
     <span class="logo-sm">LandMark</span>
 
     <div id="search-wrap">
@@ -371,222 +329,17 @@ body{font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden;background:#000
 <div id="toast"></div>
 
 <!-- ═══════════ SCRIPTS ═══════════ -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
 <script>
 // ══════════════════════════════════════════════
-//  THREE.JS — 3-D EARTH
-// ══════════════════════════════════════════════
-
-const canvas3d = document.getElementById('three-canvas');
-const renderer = new THREE.WebGLRenderer({ canvas: canvas3d, antialias: true, alpha: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 800);
-camera.position.z = 2.6;
-
-// ── Stars ──────────────────────────────────
-const starVerts = [];
-for (let i = 0; i < 12000; i++) {
-  const theta = Math.random() * Math.PI * 2;
-  const phi = Math.acos(2 * Math.random() - 1);
-  const r = 80 + Math.random() * 300;
-  starVerts.push(
-    r * Math.sin(phi) * Math.cos(theta),
-    r * Math.sin(phi) * Math.sin(theta),
-    r * Math.cos(phi)
-  );
-}
-const starGeo = new THREE.BufferGeometry();
-starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
-scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({
-  color: 0xffffff, size: 0.18, transparent: true, opacity: 0.75
-})));
-
-// ── Canvas Earth Texture ───────────────────
-function buildEarthTexture() {
-  const W = 2048, H = 1024;
-  const c = document.createElement('canvas');
-  c.width = W; c.height = H;
-  const ctx = c.getContext('2d');
-
-  // Ocean gradient
-  const og = ctx.createLinearGradient(0, 0, 0, H);
-  og.addColorStop(0,   '#071525');
-  og.addColorStop(0.2, '#0a2540');
-  og.addColorStop(0.5, '#0d3460');
-  og.addColorStop(0.8, '#0a2540');
-  og.addColorStop(1,   '#071525');
-  ctx.fillStyle = og;
-  ctx.fillRect(0, 0, W, H);
-
-  // Subtle ocean shimmer
-  ctx.globalAlpha = 0.18;
-  for (let i = 0; i < 60; i++) {
-    const x = Math.random()*W, y = Math.random()*H;
-    const r = 60 + Math.random()*180;
-    const rg = ctx.createRadialGradient(x, y, 0, x, y, r);
-    rg.addColorStop(0, '#1565c0'); rg.addColorStop(1, 'transparent');
-    ctx.fillStyle = rg;
-    ctx.beginPath(); ctx.ellipse(x, y, r, r*0.55, Math.random()*Math.PI, 0, Math.PI*2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-
-  // Helper: draw a land shape from lon/lat waypoints
-  // equirectangular: x = (lon+180)/360*W,  y = (90-lat)/180*H
-  function ll(lon, lat) { return [(lon+180)/360*W, (90-lat)/180*H]; }
-  function land(pts, color='#2d6030') {
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(...ll(...pts[0]));
-    for (let i=1;i<pts.length;i++) ctx.lineTo(...ll(...pts[i]));
-    ctx.closePath(); ctx.fill();
-  }
-  function highlight(pts) {
-    ctx.fillStyle = 'rgba(80,140,70,.35)';
-    ctx.beginPath();
-    ctx.moveTo(...ll(...pts[0]));
-    for (let i=1;i<pts.length;i++) ctx.lineTo(...ll(...pts[i]));
-    ctx.closePath(); ctx.fill();
-  }
-
-  // ── North America ──
-  land([[-168,72],[-140,70],[-120,60],[-95,49],[-75,45],[-65,47],[-60,46],[-63,44],[-70,43],[-72,41],[-80,25],[-87,15],[-90,16],[-94,20],[-105,22],[-110,24],[-118,29],[-120,35],[-124,40],[-128,50],[-140,58],[-155,60],[-162,63],[-168,66]]);
-  highlight([[-115,55],[-90,55],[-80,45],[-100,40],[-110,45]]);
-
-  // ── Greenland ──
-  land([[-57,83],[-20,83],[-17,76],[-20,70],[-30,68],[-44,65],[-52,67],[-58,70],[-60,76],[-57,83]],'#3a7040');
-
-  // ── South America ──
-  land([[-80,12],[-72,12],[-60,5],[-50,0],[-35,-5],[-35,-12],[-40,-22],[-45,-24],[-48,-28],[-52,-34],[-58,-38],[-65,-42],[-68,-55],[-74,-55],[-75,-48],[-73,-42],[-70,-30],[-72,-18],[-78,-5],[-80,0],[-80,12]]);
-
-  // ── Europe ──
-  land([[15,72],[28,71],[30,62],[25,60],[30,55],[18,58],[10,55],[8,48],[0,43],[-5,44],[-9,39],[0,36],[12,38],[15,40],[13,45],[15,48],[20,50],[18,55],[15,56],[10,56],[8,58],[10,62],[15,68],[22,71],[15,72]]);
-
-  // ── Africa ──
-  land([[-5,37],[12,37],[32,30],[36,22],[42,10],[44,2],[40,-4],[34,-12],[30,-22],[26,-34],[18,-35],[12,-30],[8,-16],[2,-2],[-4,4],[-12,10],[-16,12],[-18,16],[-16,24],[-8,28],[-5,34],[-5,37]]);
-
-  // ── Russia / North Asia ──
-  land([[28,72],[40,70],[60,72],[80,73],[100,72],[120,72],[140,70],[160,68],[170,64],[170,58],[160,52],[145,48],[140,46],[135,48],[130,42],[125,50],[110,52],[100,52],[90,52],[80,56],[70,52],[60,55],[55,52],[50,48],[40,44],[36,47],[32,50],[28,56],[24,62],[26,68],[28,72]]);
-
-  // ── Middle East ──
-  land([[36,37],[42,37],[55,24],[58,22],[56,14],[48,14],[44,10],[42,14],[36,22],[34,28],[36,37]]);
-
-  // ── South / Central Asia ──
-  land([[60,38],[65,36],[70,38],[76,34],[72,28],[70,22],[76,10],[80,6],[85,12],[90,22],[95,28],[100,30],[102,22],[106,10],[108,18],[110,22],[105,28],[100,36],[92,44],[88,48],[82,52],[76,46],[70,44],[62,42],[58,44],[54,42],[56,36],[60,38]]);
-
-  // ── India ──
-  land([[72,22],[74,32],[80,34],[88,28],[92,22],[88,14],[80,10],[76,8],[72,10],[68,22],[72,22]]);
-
-  // ── SE Asia / Indonesia ──
-  land([[100,4],[105,2],[108,4],[110,2],[116,8],[120,14],[116,18],[110,20],[104,18],[100,10],[100,4]]);
-
-  // ── China / East Asia ──
-  land([[80,50],[88,48],[96,52],[110,52],[120,52],[130,46],[130,40],[122,36],[120,26],[110,20],[106,22],[102,22],[96,28],[90,28],[84,34],[76,36],[80,42],[82,50],[80,50]]);
-
-  // ── Japan ──
-  land([[135,44],[142,44],[142,38],[138,34],[132,34],[130,38],[133,42],[135,44]]);
-
-  // ── Australia ──
-  land([[114,-22],[120,-18],[128,-14],[136,-12],[140,-18],[148,-20],[154,-26],[154,-34],[148,-38],[142,-38],[136,-36],[130,-32],[116,-34],[112,-28],[114,-22]]);
-
-  // ── New Zealand hint ──
-  land([[172,-34],[174,-36],[176,-40],[172,-44],[170,-42],[170,-38],[172,-34]]);
-
-  // ── Antarctica ──
-  ctx.globalAlpha = 0.55;
-  land([[-180,-70],[0,-70],[180,-70],[180,-90],[-180,-90],[-180,-70]],'#c8ddf0');
-  ctx.globalAlpha = 1;
-
-  // ── Polar ice cap ──
-  ctx.globalAlpha = 0.45;
-  ctx.fillStyle = '#d6eaf8';
-  ctx.fillRect(0, 0, W, H*0.06);
-  ctx.globalAlpha = 1;
-
-  return new THREE.CanvasTexture(c);
-}
-
-// ── Earth Mesh ─────────────────────────────
-const earthGeo = new THREE.SphereGeometry(1, 80, 80);
-const earthMat = new THREE.MeshPhongMaterial({
-  map: buildEarthTexture(),
-  specular: new THREE.Color(0x0a1428),
-  shininess: 22,
-});
-const earth = new THREE.Mesh(earthGeo, earthMat);
-scene.add(earth);
-
-// ── Atmosphere layers ──────────────────────
-function atm(radius, opacity, color=0x3388ff) {
-  const m = new THREE.MeshPhongMaterial({
-    color, transparent:true, opacity,
-    side: THREE.FrontSide, blending: THREE.AdditiveBlending, depthWrite:false
-  });
-  scene.add(new THREE.Mesh(new THREE.SphereGeometry(radius,64,64), m));
-}
-atm(1.015, 0.10);
-atm(1.030, 0.05, 0x2266dd);
-// outer backside glow
-const glowMat = new THREE.MeshPhongMaterial({
-  color:0x2255aa, transparent:true, opacity:0.06,
-  side:THREE.BackSide, blending:THREE.AdditiveBlending, depthWrite:false
-});
-scene.add(new THREE.Mesh(new THREE.SphereGeometry(1.07,64,64), glowMat));
-
-// ── Lights ────────────────────────────────
-scene.add(new THREE.AmbientLight(0x1a2a44, 1.0));
-const sun = new THREE.DirectionalLight(0xffffff, 1.4);
-sun.position.set(5, 3, 5);
-scene.add(sun);
-const fill = new THREE.DirectionalLight(0x112244, 0.4);
-fill.position.set(-4, -2, -3);
-scene.add(fill);
-
-// ── Resize ────────────────────────────────
-function resizeGlobe() {
-  const w = window.innerWidth, h = window.innerHeight;
-  renderer.setSize(w, h);
-  camera.aspect = w/h;
-  camera.updateProjectionMatrix();
-}
-resizeGlobe();
-window.addEventListener('resize', resizeGlobe);
 
 // ── Animate ───────────────────────────────
 let mouseX = 0, mouseY = 0;
-document.addEventListener('mousemove', e => {
-  mouseX = (e.clientX/window.innerWidth - 0.5);
-  mouseY = (e.clientY/window.innerHeight - 0.5);
+window.addEventListener('DOMContentLoaded', () => {
+  initMap();
 });
-
-// Start rotated so India faces the viewer (lon ≈ 79°E → rotate -79° around Y)
-earth.rotation.y = -(79 * Math.PI / 180);
-
-(function animate() {
-  requestAnimationFrame(animate);
-  earth.rotation.y += 0.0018;
-  earth.rotation.x += (mouseY * 0.4 - earth.rotation.x) * 0.03;
-  renderer.render(scene, camera);
-})();
-
-// ── Click transitions ─────────────────────
-document.getElementById('explore-btn').addEventListener('click', openMap);
-canvas3d.addEventListener('click', openMap);
-
-function openMap() {
-  document.getElementById('earth-view').classList.add('exit');
-  document.getElementById('map-view').classList.add('show');
-  if (!mapReady) initMap();
-}
-function goHome() {
-  document.getElementById('map-view').classList.remove('show');
-  document.getElementById('earth-view').classList.remove('exit');
-}
 
 
 // ══════════════════════════════════════════════
@@ -948,7 +701,7 @@ function openGenerator(id) {
     const p = allPlotsGlobal.find(x => x.id === id);
     if (!p) return;
     localStorage.setItem('selectedPlot', JSON.stringify(p));
-    window.location.href = '/plot-details';
+    window.location.href = '/plot-details?plot_id=' + encodeURIComponent(id);
 }
 
 

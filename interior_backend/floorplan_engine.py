@@ -102,15 +102,7 @@ def _greedy_split(
     rng: random.Random,
     min_area: float,
 ) -> List[Polygon]:
-    """
-    Split *building* into exactly *n_target* cells by always splitting the
-    largest remaining cell.  Splitting the building polygon directly ensures:
 
-    - Every cell is fully inside the building — no cell extends outside.
-    - All building area is covered — nothing is discarded by an area filter.
-    - Axis-aligned cuts produce rectangular cells in the interior; cuts that
-      cross a diagonal building edge naturally produce triangular cells.
-    """
     cells: List[Polygon] = [building]
     stalled = 0                         # guard against unsplittable geometries
 
@@ -285,6 +277,73 @@ def _generate_floor(
     return rooms
 
 
+def _identify_walls_and_openings(building: Polygon, rooms: List[Dict], rng: random.Random):
+    """
+    Identify wall segments and procedurally place doors and windows.
+    Windows go on exterior walls; doors go on interior walls (connecting to circulation if possible).
+    """
+    doors = []
+    windows = []
+    
+    building_exterior = building.exterior
+    
+    for i, room in enumerate(rooms):
+        poly = Polygon(room["coords"])
+        if not poly.is_valid:
+            poly = poly.buffer(0)
+            
+        coords = list(poly.exterior.coords)
+        for j in range(len(coords) - 1):
+            p1 = coords[j]
+            p2 = coords[j+1]
+            seg = LineString([p1, p2])
+            mid = seg.centroid
+            
+            # ── Window placement (Exterior walls) ────────────────────────────
+            # If segment is on the building boundary
+            if building_exterior.distance(seg) < 0.01:
+                if seg.length > 1.5:  # Minimum wall length for a window
+                    windows.append({
+                        "room_idx": i,
+                        "pos": [mid.x, mid.y],
+                        "width": 1.2,
+                        "height": 1.4,
+                        "elevation": 0.9,
+                        "normal": [p2[1]-p1[1], p1[0]-p2[0]], # vector perpendicular to wall
+                        "wall_seg": [p1, p2]
+                    })
+            
+            # ── Door placement (Interior walls) ───────────────────────────────
+            # Doors are harder: we only want one per room, ideally to circulation.
+            # Simplified: if it's an interior wall and room is not circulation,
+            # find the neighbor and place a door if neighbor is circulation.
+            else:
+                is_circulation = (room["type"] == "circulation")
+                if not is_circulation:
+                    # check if this segment touch another room
+                    for k, peer in enumerate(rooms):
+                        if i == k: continue
+                        if peer["type"] == "circulation":
+                            peer_poly = Polygon(peer["coords"])
+                            if peer_poly.distance(seg) < 0.01:
+                                # Candidate for a door to corridor
+                                if seg.length > 1.0:
+                                    # unique door per room
+                                    if not any(d["room_idx"] == i for d in doors):
+                                        doors.append({
+                                            "room_idx": i,
+                                            "peer_idx": k,
+                                            "pos": [mid.x, mid.y],
+                                            "width": 0.9,
+                                            "height": 2.1,
+                                            "normal": [p2[1]-p1[1], p1[0]-p2[0]],
+                                            "wall_seg": [p1, p2]
+                                        })
+                                        break
+    
+    return doors, windows
+
+
 # ── SVG renderer ──────────────────────────────────────────────────────────────
 SVG_W, SVG_H, PAD = 620, 420, 24
 
@@ -310,7 +369,7 @@ def _poly_points(coords: List[Tuple], tx, ty) -> str:
     return " ".join(f"{tx(c[0])},{ty(c[1])}" for c in coords[:-1])
 
 
-def _render_svg(building: Polygon, rooms: List[Dict]) -> str:
+def _render_svg(building: Polygon, rooms: List[Dict], doors: List[Dict], windows: List[Dict]) -> str:
     tx, ty = _svg_transform(building)
     parts: List[str] = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {SVG_W} {SVG_H}" '
@@ -357,6 +416,16 @@ def _render_svg(building: Polygon, rooms: List[Dict]) -> str:
             f'font-family="system-ui,sans-serif">{room["area_sqm"]} m²</text>'
         )
 
+    # ── Render doors (small brown rectangles) ────────────────────────────
+    for d in doors:
+        cx, cy = tx(d["pos"][0]), ty(d["pos"][1])
+        parts.append(f'<circle cx="{cx}" cy="{cy}" r="2.5" fill="#8B4513" stroke="white" stroke-width="0.5"/>')
+
+    # ── Render windows (thin cyan lines) ─────────────────────────────────
+    for w in windows:
+        cx, cy = tx(w["pos"][0]), ty(w["pos"][1])
+        parts.append(f'<rect x="{cx-3}" y="{cy-1}" width="6" height="2" fill="#00ffff" opacity="0.8"/>')
+
     parts.append("</svg>")
     return "\n".join(parts)
 
@@ -388,8 +457,11 @@ def generate_floor_plan(
 
     floors_out = []
     for f in range(1, num_floors + 1):
+        rng = random.Random(seed + f * 7)
         rooms = _generate_floor(bldg, programme, total_area, seed=seed + f * 7)
-        svg   = _render_svg(bldg, rooms)
+        doors, windows = _identify_walls_and_openings(bldg, rooms, rng)
+        svg   = _render_svg(bldg, rooms, doors, windows)
+        
         floors_out.append({
             "floor": f,
             "rooms": [
@@ -403,6 +475,9 @@ def generate_floor_plan(
                 }
                 for r in rooms
             ],
+            "doors": doors,
+            "windows": windows,
+            "boundary": [[c[0], c[1]] for c in list(bldg.exterior.coords)],
             "svg": svg,
         })
 

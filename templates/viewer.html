@@ -1,454 +1,616 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Infronix Infrastructure Viewer</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
-  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <meta charset="UTF-8"/>
+  <title>Infronix CAD Viewer — 3D Floor Plan Inspector</title>
+  <meta name="description" content="Interactive 3D CAD viewer for Infronix infrastructure and floor plan visualisation with DXF export."/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/css/three-cad-viewer.css"/>
+
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; font-family: Inter, sans-serif; }
-    body { background: #0b0f19; color: #fff; overflow: hidden; }
-    #map { position: absolute; inset: 0; }
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    :root {
+      --bg:       #080c18;
+      --glass:    rgba(11, 17, 36, 0.85);
+      --border:   rgba(255,255,255,.08);
+      --accent:   #4da6ff;
+      --purple:   #a78bfa;
+      --success:  #22c55e;
+      --text:     #e2e8f0;
+      --muted:    rgba(255,255,255,.42);
+      --bar-h:    54px;
+    }
+
+    html, body { height:100%; overflow:hidden; font-family:Inter,sans-serif; background:var(--bg); color:var(--text); }
+
+    /* ── Top navigation bar ─────────────────────────────────── */
+    #top-bar {
+      position:fixed; top:0; left:0; right:0; height:var(--bar-h); z-index:200;
+      display:flex; align-items:center; gap:10px; padding:0 16px;
+      background:rgba(8,12,24,.92);
+      border-bottom:1px solid var(--border);
+      backdrop-filter:blur(18px);
+    }
+
+    .brand {
+      display:flex; align-items:center; gap:8px;
+      font-size:.88rem; font-weight:700; color:var(--accent);
+      letter-spacing:.04em; white-space:nowrap; margin-right:6px;
+    }
+    .brand svg { opacity:.85; }
+
+    .sep { width:1px; height:28px; background:var(--border); flex-shrink:0; }
+
+    /* view mode tabs */
+    .view-tabs { display:flex; gap:4px; }
+    .vtab {
+      border:1px solid var(--border); border-radius:7px; padding:5px 13px;
+      background:rgba(255,255,255,.05); color:rgba(255,255,255,.7);
+      cursor:pointer; font-size:.78rem; font-weight:600;
+      font-family:Inter,sans-serif; transition:all .18s;
+      display:flex; align-items:center; gap:5px;
+    }
+    .vtab:hover:not(.active) { background:rgba(255,255,255,.10); color:#fff; }
+    .vtab.active { background:var(--accent); color:#001830; border-color:var(--accent); }
+    .vtab.map-tab.active { background:var(--purple); border-color:var(--purple); color:#1a0044; }
+
+    /* floor selector */
+    #floor-selector { display:flex; gap:4px; align-items:center; }
+    .floor-label { font-size:.7rem; color:var(--muted); margin-right:3px; }
+    .fbtn {
+      border:1px solid var(--border); border-radius:5px; padding:3px 9px;
+      background:rgba(255,255,255,.05); color:rgba(255,255,255,.65); cursor:pointer;
+      font-size:.73rem; font-weight:600; font-family:Inter,sans-serif; transition:all .18s;
+    }
+    .fbtn.active { background:var(--purple); border-color:var(--purple); color:#fff; }
+
+    /* spacer */
+    .spacer { flex:1; }
+
+    /* status badge */
+    #status-badge {
+      font-size:.72rem; color:var(--muted); display:flex; align-items:center; gap:5px;
+    }
+    #status-dot { width:7px; height:7px; border-radius:50%; background:#334155; display:inline-block; }
+    #status-dot.ok { background:var(--success); box-shadow:0 0 5px var(--success); }
+    #status-dot.loading { background:#f59e0b; animation:pulse .9s infinite; }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    /* export button */
+    #btn-export {
+      border:1px solid rgba(96,180,255,.25); border-radius:8px; padding:6px 14px;
+      background:rgba(77,166,255,.12); color:#9fd4ff; font-size:.78rem; font-weight:700;
+      cursor:pointer; font-family:Inter,sans-serif; transition:all .2s;
+      display:flex; align-items:center; gap:6px;
+    }
+    #btn-export:hover { background:rgba(77,166,255,.22); border-color:rgba(96,180,255,.5); color:#c5e8ff; }
+    #btn-export:disabled { opacity:.5; cursor:not-allowed; }
+
+    /* back link */
+    #back-link {
+      border:1px solid var(--border); border-radius:7px; padding:5px 11px;
+      background:rgba(255,255,255,.04); color:var(--muted); font-size:.75rem; font-weight:600;
+      text-decoration:none; font-family:Inter,sans-serif; transition:all .18s;
+    }
+    #back-link:hover { background:rgba(255,255,255,.09); color:var(--text); }
+
+    /* AG toggle button */
+    #btn-ag {
+      border:1px solid rgba(167,139,250,.3); border-radius:8px; padding:5px 13px;
+      background:rgba(167,139,250,.08); color:#c4b5fd; font-size:.78rem; font-weight:700;
+      cursor:pointer; font-family:Inter,sans-serif; transition:all .2s;
+      display:flex; align-items:center; gap:6px;
+    }
+    #btn-ag:hover { background:rgba(167,139,250,.18); border-color:rgba(167,139,250,.5); }
+    #btn-ag.active { background:#7c3aed; border-color:#7c3aed; color:#fff; }
+
+    /* BBMP compliance strip (shown below top bar) */
+    #compliance-strip {
+      position:fixed; top:var(--bar-h); left:0; right:0; z-index:190;
+      display:none; align-items:center; gap:12px; padding:5px 16px;
+      background:rgba(8,12,24,.96); border-bottom:1px solid var(--border);
+      font-size:.73rem; backdrop-filter:blur(10px);
+    }
+    #compliance-strip.show { display:flex; }
+    .chip {
+      display:flex; align-items:center; gap:5px; padding:3px 9px;
+      border-radius:20px; border:1px solid; font-weight:600;
+    }
+    .chip.ok  { border-color:rgba(34,197,94,.3); color:#4ade80; background:rgba(34,197,94,.08); }
+    .chip.warn{ border-color:rgba(245,158,11,.3); color:#fbbf24; background:rgba(245,158,11,.08); }
+    .chip.bad { border-color:rgba(239,68,68,.3);  color:#f87171; background:rgba(239,68,68,.08); }
+    .infra-strip { color:var(--muted); display:flex; gap:10px; margin-left:auto; }
+    .infra-strip span { display:flex; align-items:center; gap:4px; }
+
+    /* ── Main viewports ─────────────────────────────────────── */
+    #cad-root {
+      position:fixed; top:var(--bar-h); left:0; right:0; bottom:0; z-index:10;
+      background:var(--bg);
+      transition: top .2s;
+    }
+    #cad-root.with-strip { top: calc(var(--bar-h) + 33px); }
+
+    /* Override three-cad-viewer internals for dark theme consistency */
+    #cad-root .tcv-display,
+    #cad-root .tcv-display * { font-family:Inter,sans-serif !important; }
+
+    /* force the tree panel to have our background */
+    #cad-root .tcv-tree-panel { background:rgba(8,12,24,.97) !important; border-right:1px solid var(--border) !important; }
+
+    #map-overlay {
+      position:fixed; top:var(--bar-h); left:0; right:0; bottom:0;
+      z-index:30; display:none;
+    }
+
+    /* ── Loading screen ─────────────────────────────────────── */
     #loading {
-      position: absolute; inset: 0; z-index: 100;
-      display: flex; align-items: center; justify-content: center;
-      background: #0b0f19; font-size: 1.1rem; font-weight: 600;
+      position:fixed; inset:0; z-index:500;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      background:var(--bg); gap:16px;
+      transition:opacity .5s, transform .5s;
     }
-    #ui-panel {
-      position: absolute; top: 18px; left: 18px; z-index: 50;
-      width: 300px; border-radius: 10px; padding: 14px;
-      background: rgba(16,24,40,.92); border: 1px solid rgba(255,255,255,.12);
-      backdrop-filter: blur(8px); max-height: calc(100vh - 40px); overflow-y: auto;
+    #loading.fade-out { opacity:0; pointer-events:none; transform:scale(1.04); }
+
+    .loading-logo {
+      font-size:2.2rem; font-weight:800; letter-spacing:-.04em;
+      background:linear-gradient(135deg, #4da6ff, #a78bfa);
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
     }
-    h2 { font-size: 1rem; margin-bottom: 12px; color: #60b4ff; }
-    .section-label {
-      font-size: .75rem; font-weight: 600; color: rgba(255,255,255,.45);
-      text-transform: uppercase; letter-spacing: .06em; margin: 12px 0 6px;
+    .loading-ring {
+      width:52px; height:52px; border:3px solid rgba(77,166,255,.15);
+      border-top-color:var(--accent); border-radius:50%;
+      animation:spin .8s linear infinite;
     }
-    .view-toggles { display: flex; gap: 8px; margin-bottom: 4px; }
-    .btn {
-      flex: 1; border: 1px solid rgba(255,255,255,.2); border-radius: 7px; padding: 8px;
-      background: rgba(255,255,255,.06); color: #fff; cursor: pointer; font-size: .84rem;
+    @keyframes spin { to { transform:rotate(360deg); } }
+    #loading-msg { font-size:.85rem; color:var(--muted); }
+
+    /* ── Error / empty state ────────────────────────────────── */
+    #empty-state {
+      display:none; position:absolute; inset:0;
+      flex-direction:column; align-items:center; justify-content:center; gap:16px;
+      background:var(--bg); z-index:15;
     }
-    .btn.active { background: #60b4ff; color: #00121f; border-color: #60b4ff; font-weight: 700; }
-    .btn:hover:not(.active) { background: rgba(255,255,255,.12); }
-    #fpv-hint {
-      display: none; font-size: .78rem; color: rgba(255,255,255,.5);
-      margin: 4px 0 8px;
+    #empty-state.show { display:flex; }
+    .empty-icon { font-size:3.5rem; opacity:.35; }
+    .empty-title { font-size:1.1rem; font-weight:700; }
+    .empty-desc { font-size:.83rem; color:var(--muted); text-align:center; max-width:360px; line-height:1.6; }
+    .goto-btn {
+      margin-top:6px; border:none; border-radius:9px;
+      padding:10px 22px; background:var(--accent); color:#001830;
+      font-weight:700; font-size:.85rem; cursor:pointer; font-family:Inter,sans-serif;
+      text-decoration:none; display:inline-block;
     }
-    .floor-btns { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 4px; }
-    .floor-btn {
-      border: 1px solid rgba(255,255,255,.2); border-radius: 6px; padding: 5px 10px;
-      background: rgba(255,255,255,.06); color: #fff; cursor: pointer; font-size: .8rem;
-    }
-    .floor-btn.active { background: #a78bfa; color: #0d0921; border-color: #a78bfa; font-weight: 700; }
-    .floor-btn:hover:not(.active) { background: rgba(167,139,250,.18); }
-    .layer-item { display: flex; justify-content: space-between; align-items: center; font-size: .82rem; margin-bottom: 8px; }
-    .layer-item input { accent-color: #60b4ff; }
-    #room-legend { margin-top: 4px; }
-    .legend-row { display: flex; align-items: center; gap: 7px; font-size: .78rem; margin-bottom: 5px; }
-    .legend-dot { width: 11px; height: 11px; border-radius: 2px; flex-shrink: 0; }
-    #back-btn {
-      position: absolute; top: 18px; right: 18px; z-index: 50; text-decoration: none;
-      border: 1px solid rgba(255,255,255,.2); border-radius: 7px; padding: 7px 12px;
-      background: rgba(255,255,255,.08); color: #fff; font-size: .82rem;
-    }
-    #back-btn:hover { background: rgba(255,255,255,.15); }
+
+    /* ── Room legend tooltip ────────────────────────────────── */
     #tooltip {
-      position: absolute; z-index: 60; pointer-events: none;
-      background: rgba(10,18,36,.92); border: 1px solid rgba(255,255,255,.15);
-      border-radius: 7px; padding: 8px 11px; font-size: .8rem; display: none;
-      max-width: 180px;
+      position:fixed; z-index:300; pointer-events:none;
+      background:rgba(8,12,28,.95); border:1px solid rgba(77,166,255,.2);
+      border-radius:9px; padding:9px 13px; font-size:.78rem; display:none;
+      backdrop-filter:blur(12px); max-width:220px; line-height:1.5;
     }
-    #tooltip strong { display: block; margin-bottom: 3px; color: #9fd1ff; }
+
+    /* ── MapLibre 3D map overlay ─────────────────────────── */
+    #map-overlay #map { width:100%; height:100%; }
+
+    /* ── Responsive CAD viewer (resize guard) ────────────── */
+    #cad-root canvas { display:block; }
   </style>
 </head>
 <body>
-  <div id="loading">Loading Geometry Engine…</div>
-  <a id="back-btn" href="/plot-details">Exit Viewer</a>
-  <div id="tooltip"></div>
 
-  <div id="ui-panel">
-    <h2>Infrastructure Viewer</h2>
+<!-- Loading screen -->
+<div id="loading">
+  <div class="loading-logo">⬡ Infronix</div>
+  <div class="loading-ring"></div>
+  <div id="loading-msg">Initialising CAD Engine…</div>
+</div>
 
-    <div class="section-label">View Mode</div>
-    <div class="view-toggles">
-      <button class="btn active" id="btn-2d">2D Plan</button>
-      <button class="btn" id="btn-3d">3D Model</button>
-      <button class="btn" id="btn-fpv">First Person</button>
-    </div>
-    <div id="fpv-hint">Use <b>WASD</b> to walk, <b>Mouse</b> to look.</div>
+<!-- Empty / error state -->
+<div id="empty-state">
+  <div class="empty-icon">🏗</div>
+  <div class="empty-title">No Layout Loaded</div>
+  <div class="empty-desc" id="empty-desc">Generate and select a site plan layout from Plot Details first, then open the viewer.</div>
+  <a class="goto-btn" href="/plot-details">Go to Plot Details →</a>
+</div>
 
-    <div id="floor-section" style="display:none">
-      <div class="section-label">Floor</div>
-      <div class="floor-btns" id="floor-btns"></div>
-    </div>
+<!-- Tooltip -->
+<div id="tooltip"></div>
 
-    <div class="section-label">Layers</div>
-    <div id="layer-controls"></div>
-
-    <div id="room-legend-section" style="display:none">
-      <div class="section-label">Room Types</div>
-      <div id="room-legend"></div>
-    </div>
+<!-- Top navigation bar -->
+<nav id="top-bar">
+  <div class="brand">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4da6ff" stroke-width="2">
+      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>
+    CAD Viewer
   </div>
 
-  <div id="map"></div>
+  <div class="sep"></div>
 
-  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-  <script>
-    const FLOOR_H = 3.2; // metres per floor
-    const loadingEl = document.getElementById('loading');
-    const layerState = {};
-    let map, isFPV = false;
-    const keys = {};
-    let currentFloor = 'all';
-    let numFloors = 1;
+  <!-- View mode -->
+  <div class="view-tabs">
+    <button class="vtab active"  id="btn-cad"    data-mode="cad">🏗 CAD 3D</button>
+    <button class="vtab map-tab" id="btn-map2d"  data-mode="map2d">🗺 Map 2D</button>
+    <button class="vtab map-tab" id="btn-map3d"  data-mode="map3d">🌆 Map 3D</button>
+  </div>
 
-    function setLoadingError(msg) { loadingEl.textContent = msg; }
+  <div class="sep"></div>
 
-    function colorForZone(z) {
-      const k = (z || '').toLowerCase();
-      if (k.includes('building')) return '#4A90D9';
-      if (k.includes('green'))    return '#5cb85c';
-      if (k.includes('park'))     return '#9B9B9B';
-      if (k.includes('utility'))  return '#c0692a';
-      return '#60b4ff';
-    }
+  <!-- Floor selector (shown when CAD active) -->
+  <div id="floor-selector" style="display:none">
+    <span class="floor-label">FLOOR:</span>
+    <!-- populated by JS -->
+  </div>
 
-    function centerFromFeatures(features) {
-      let sx = 0, sy = 0, n = 0;
-      features.forEach(f => {
-        const coords = f.geometry?.coordinates;
-        if (!coords) return;
-        const rings = f.geometry.type === 'MultiPolygon' ? coords.flat(1) : coords;
-        rings.forEach(ring => {
-          if (Array.isArray(ring)) ring.forEach(pt => {
-            if (Array.isArray(pt) && pt.length >= 2) { sx += pt[0]; sy += pt[1]; n++; }
-          });
-        });
-      });
-      if (!n || isNaN(sx)) return [80.2707, 13.0827];
-      return [sx / n, sy / n];
-    }
+  <div class="sep"></div>
 
-    // ── Build room GeoJSON from interiorFloorPlan ─────────────────────────────
-    function buildRoomFeatures(interior) {
-      const features = [];
-      if (!interior?.floors) return features;
-      for (const floor of interior.floors) {
-        const fn = floor.floor;
-        const base = (fn - 1) * FLOOR_H;
-        const top  = fn * FLOOR_H;
-        for (const room of floor.rooms) {
-          if (!room.coords || room.coords.length < 3) continue;
-          const ring = [...room.coords];
-          // ensure ring is closed
-          const first = ring[0], last = ring[ring.length - 1];
-          if (first[0] !== last[0] || first[1] !== last[1]) ring.push(first);
-          features.push({
-            type: 'Feature',
-            geometry: { type: 'Polygon', coordinates: [ring] },
-            properties: {
-              floor:    fn,
-              name:     room.name,
-              type:     room.type,
-              color:    room.color,
-              area_sqm: room.area_sqm,
-              shape:    room.shape,
-              base:     base,
-              height:   top,
-            }
-          });
-        }
+  <!-- AG BIM Toggle -->
+  <button id="btn-ag" title="Toggle Anti-Gravity BIM Core">🔮 AG BIM</button>
+
+  <div class="spacer"></div>
+
+  <!-- Status -->
+  <div id="status-badge">
+    <span id="status-dot" class="loading"></span>
+    <span id="status-text">Loading…</span>
+  </div>
+
+  <div class="sep"></div>
+
+  <!-- Export -->
+  <button id="btn-export">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Export DXF
+  </button>
+
+  <a id="back-link" href="/plot-details">← Back</a>
+</nav>
+
+<!-- BBMP Compliance strip -->
+<div id="compliance-strip">
+  <span style="font-weight:700;color:var(--muted);white-space:nowrap">BBMP:</span>
+  <span id="chip-fsi"  class="chip ok">FSI –</span>
+  <span id="chip-ht"   class="chip ok">Height –</span>
+  <span id="chip-infra" class="chip ok">Infra –</span>
+  <div class="infra-strip">
+    <span>💧 Drain <b id="val-drain">–</b>m</span>
+    <span>🚰 Water <b id="val-water">–</b>m</span>
+    <span>🚽 Sewage <b id="val-sewage">–</b>m</span>
+  </div>
+</div>
+
+<!-- CAD 3D viewport (three-cad-viewer mount point) -->
+<div id="cad-root"></div>
+
+<!-- Map overlay (MapLibre) — shown when map tabs are active -->
+<div id="map-overlay">
+  <div id="map" style="width:100%;height:100%"></div>
+</div>
+
+<!-- earcut polygon triangulation (loaded before bridge to avoid Three.js conflict) -->
+<script src="/static/js/earcut.js"></script>
+<!-- Scripts -->
+<script src="/static/js/three-cad-viewer.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"/>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+
+<script type="module">
+import { initialiseCADViewer, exportDXF } from '/static/js/3d/cadViewerBridge.js?v=5';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let cadDisplay = null, cadViewer = null, cadMounted = false;
+let mapInstance = null, mapLoaded = false;
+let sitePlan = null, interior = null;
+let currentMode = 'cad';
+let agEnabled = false;   // Anti-Gravity BIM Core toggle
+
+const FLOOR_H = 3.2;
+
+// ── Elements ──────────────────────────────────────────────────────────────────
+const loadingEl     = document.getElementById('loading');
+const emptyEl       = document.getElementById('empty-state');
+const emptyDescEl   = document.getElementById('empty-desc');
+const statusDot     = document.getElementById('status-dot');
+const statusText    = document.getElementById('status-text');
+const floorSel      = document.getElementById('floor-selector');
+const exportBtn     = document.getElementById('btn-export');
+const tooltipEl     = document.getElementById('tooltip');
+const cadRoot       = document.getElementById('cad-root');
+const mapOverlay    = document.getElementById('map-overlay');
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function setStatus(msg, state = 'ok') {
+  statusDot.className = state;
+  statusText.textContent = msg;
+}
+
+function showEmpty(reason) {
+  loadingEl.classList.add('fade-out');
+  emptyDescEl.textContent = reason;
+  emptyEl.classList.add('show');
+  setStatus('No data', '');
+}
+
+// ── Data loading ──────────────────────────────────────────────────────────────
+function loadData() {
+  const rawPlan     = localStorage.getItem('generatedSitePlan');
+  const rawInterior = localStorage.getItem('interiorFloorPlan');
+  if (!rawPlan) { showEmpty('Generate and select a site plan layout from Plot Details first.'); return false; }
+  try {
+    sitePlan = JSON.parse(rawPlan);
+    interior = rawInterior ? JSON.parse(rawInterior) : null;
+  } catch {
+    showEmpty('Layout data is corrupted. Regenerate from Plot Details.'); return false;
+  }
+  if (!sitePlan?.zones?.features?.length && !interior?.floors?.length) {
+    showEmpty('Layout is empty. Regenerate a plan with buildings first.'); return false;
+  }
+  return true;
+}
+
+// ── Floor picker ──────────────────────────────────────────────────────────────
+function buildFloorPicker() {
+  const floors = interior?.floors || [];
+  if (floors.length <= 1) return;
+  floorSel.style.display = 'flex';
+  let html = '<span class="floor-label">FLOOR:</span>';
+  html += '<button class="fbtn active" data-floor="all">All</button>';
+  floors.forEach(f => {
+    html += `<button class="fbtn" data-floor="${f.floor}">${f.floor}</button>`;
+  });
+  floorSel.innerHTML = html;
+
+  floorSel.querySelectorAll('.fbtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      floorSel.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      isolateFloor(btn.dataset.floor);
+    });
+  });
+}
+
+function isolateFloor(floor) {
+  if (!cadViewer) return;
+  const isAll = (floor === 'all');
+  const floors = interior?.floors || [];
+  floors.forEach(f => {
+    const id = `/Building/Floor${f.floor}`;
+    try { cadViewer.setVisibility(id, isAll || String(f.floor) === floor); } catch {}
+  });
+}
+
+// ── CAD viewer init ───────────────────────────────────────────────────────────
+function mountCADViewer() {
+  if (cadMounted) return;
+  cadMounted = true;
+  setStatus('Building model…', 'loading');
+
+  // Small timeout so the loading ring renders
+  setTimeout(() => {
+    try {
+      const result = initialiseCADViewer(cadRoot, sitePlan, interior, agEnabled);
+      if (result) {
+        ({ display: cadDisplay, viewer: cadViewer } = result);
+        setStatus('Ready', 'ok');
+        buildFloorPicker();
+      } else {
+        setStatus('Render error', '');
       }
-      return features;
+    } catch (err) {
+      console.error('[viewer] CAD init error:', err);
+      setStatus('Error — see console', '');
     }
+    loadingEl.classList.add('fade-out');
+  }, 60);
+}
 
-    // ── Floor selector ────────────────────────────────────────────────────────
-    function buildFloorPicker(n) {
-      if (n <= 1) { currentFloor = 1; return; } // no picker needed for single floor
-      const container = document.getElementById('floor-btns');
-      document.getElementById('floor-section').style.display = 'block';
-      let html = `<button class="floor-btn active" data-floor="all">All</button>`;
-      for (let i = 1; i <= n; i++) {
-        html += `<button class="floor-btn" data-floor="${i}">Floor ${i}</button>`;
+// ── MapLibre map ──────────────────────────────────────────────────────────────
+function geoCenter(features) {
+  let sx = 0, sy = 0, n = 0;
+  (features || []).forEach(f => {
+    const coords = f.geometry?.coordinates || [];
+    const flat = f.geometry?.type === 'MultiPolygon' ? coords.flat(2) : coords.flat(1);
+    flat.forEach(([x,y]) => { sx+=x; sy+=y; n++; });
+  });
+  return n ? [sx/n, sy/n] : [78.9629, 20.5937];
+}
+
+function mountMap(pitch = 0) {
+  if (mapLoaded) { mapInstance?.easeTo({ pitch, duration: 700 }); return; }
+  mapLoaded = true;
+  setStatus('Loading map…', 'loading');
+
+  const features = sitePlan?.zones?.features || [];
+  const center   = geoCenter(features);
+
+  mapInstance = new maplibregl.Map({
+    container: 'map',
+    style: 'https://demotiles.maplibre.org/style.json',
+    center, zoom: 16, pitch, bearing: pitch ? -20 : 0,
+  });
+  mapInstance.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+  mapInstance.on('load', () => {
+    const ZONE_COLORS = { building:'#4da6ff', greenery:'#22c55e', parking:'#94a3b8', road:'#e2e8f0', utility:'#f97316' };
+    const colorized = features.map(f => ({
+      ...f, properties: {
+        ...f.properties,
+        _color: ZONE_COLORS[f.properties?.zone] || '#60b4ff',
+        _height: (f.properties?.zone === 'building') ? Math.max(FLOOR_H, (f.properties?.num_floors||3)*FLOOR_H) : 1.5,
       }
-      container.innerHTML = html;
-      container.querySelectorAll('.floor-btn').forEach(btn => {
-        btn.addEventListener('click', () => selectFloor(btn.dataset.floor));
+    }));
+
+    mapInstance.addSource('zones', { type:'geojson', data:{ type:'FeatureCollection', features: colorized } });
+    mapInstance.addLayer({ id:'zones-fill',  type:'fill', source:'zones', paint:{ 'fill-color':['get','_color'], 'fill-opacity': 0.25 } });
+    mapInstance.addLayer({ id:'zones-line',  type:'line', source:'zones', paint:{ 'line-color':['get','_color'], 'line-width': 1.4 } });
+    mapInstance.addLayer({ id:'zones-3d',    type:'fill-extrusion', source:'zones',
+      layout:{ visibility: pitch > 0 ? 'visible' : 'none' },
+      paint:{ 'fill-extrusion-color':['get','_color'], 'fill-extrusion-height':['get','_height'], 'fill-extrusion-opacity': 0.85 } });
+
+    // Room layer (2D flat, from interior)
+    if (interior?.floors?.length) {
+      const roomFeatures = interior.floors.flatMap(fl =>
+        (fl.rooms||[]).map(r => ({
+          type:'Feature',
+          geometry:{ type:'Polygon', coordinates:[r.coords] },
+          properties:{ name:r.name, color:r.color||'#60b4ff', type:r.type, floor:fl.floor, area:r.area_sqm },
+        }))
+      );
+      mapInstance.addSource('rooms', { type:'geojson', data:{ type:'FeatureCollection', features: roomFeatures } });
+      mapInstance.addLayer({ id:'rooms-fill', type:'fill', source:'rooms', paint:{ 'fill-color':['get','color'], 'fill-opacity': 0.8 } });
+      mapInstance.addLayer({ id:'rooms-line', type:'line', source:'rooms', paint:{ 'line-color':'#ffffff', 'line-width': 0.9, 'line-opacity':0.6 } });
+
+      // Tooltip on rooms
+      mapInstance.on('mousemove', 'rooms-fill', e => {
+        const p = e.features[0]?.properties; if (!p) return;
+        tooltipEl.style.display = 'block';
+        tooltipEl.style.left = (e.point.x + 14) + 'px';
+        tooltipEl.style.top  = (e.point.y - 8) + 'px';
+        tooltipEl.innerHTML = `<strong style="color:#a78bfa">${p.name}</strong><br>${(+p.area).toFixed(1)} m² · Floor ${p.floor}`;
       });
+      mapInstance.on('mouseleave', 'rooms-fill', () => { tooltipEl.style.display = 'none'; });
     }
 
-    function selectFloor(floor) {
-      currentFloor = floor === 'all' ? 'all' : Number(floor);
-      document.querySelectorAll('.floor-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.floor == floor);
-      });
-      applyFloorFilter();
-    }
+    setStatus('Map ready', 'ok');
+    if (pitch > 0) mapInstance.setLayoutProperty('zones-3d', 'visibility', 'visible');
+  });
+}
 
-    function applyFloorFilter() {
-      const f = currentFloor;
-      const isAll = (f === 'all');
-      const roomsExist = !!map.getLayer('rooms-extrusion');
-      
-      // Hide individual rooms completely if 'All' is selected, else show the specific floor's rooms.
-      const roomFilter = isAll ? ['==', 'floor', -1] : ['==', ['get', 'floor'], f];
+// ── View mode switching ───────────────────────────────────────────────────────
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.vtab').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
 
-      ['rooms-extrusion', 'rooms-fill', 'rooms-line'].forEach(id => {
-        if (map.getLayer(id)) {
-          map.setFilter(id, roomFilter);
-        }
-      });
+  const isCAD = (mode === 'cad');
+  cadRoot.style.display    = isCAD ? 'block' : 'none';
+  mapOverlay.style.display = isCAD ? 'none'  : 'block';
+  floorSel.style.display   = isCAD && (interior?.floors?.length > 1) ? 'flex' : 'none';
 
-      // Make the building structural shell solid when rooms are hidden
-      if (map.getLayer('zones-extrusion')) {
-        map.setPaintProperty('zones-extrusion', 'fill-extrusion-opacity', isAll || !roomsExist ? 0.88 : 0.12);
-      }
-    }
-
-    // ── Room legend ───────────────────────────────────────────────────────────
-    function buildLegend(interior) {
-      if (!interior?.floors?.length) return;
-      const seen = new Map();
-      for (const floor of interior.floors) {
-        for (const r of floor.rooms) {
-          if (!seen.has(r.type)) seen.set(r.type, { label: r.name.replace(/\s\d+$/, ''), color: r.color });
-        }
-      }
-      const container = document.getElementById('room-legend');
-      container.innerHTML = [...seen.values()].map(({ label, color }) =>
-        `<div class="legend-row"><div class="legend-dot" style="background:${color}"></div><span>${label}</span></div>`
-      ).join('');
-      document.getElementById('room-legend-section').style.display = 'block';
-    }
-
-    // ── Layer toggle helper ───────────────────────────────────────────────────
-    function addLayerToggle(label, key, onChange, checked = true) {
-      const wrap = document.getElementById('layer-controls');
-      const row  = document.createElement('div');
-      row.className = 'layer-item';
-      row.innerHTML = `<span>${label}</span><input type="checkbox" ${checked ? 'checked' : ''} />`;
-      row.querySelector('input').addEventListener('change', e => onChange(e.target.checked));
-      wrap.appendChild(row);
-      layerState[key] = checked;
-    }
-
-    // ── View mode ─────────────────────────────────────────────────────────────
-    function apply3DMode(mode) {
-      isFPV = mode === 'fpv';
-      map.easeTo({
-        pitch:   mode === '2d' ? 0  : mode === '3d' ? 62 : 82,
-        bearing: mode === '2d' ? 0  : mode === '3d' ? -25 : map.getBearing(),
-        zoom:    mode === 'fpv' ? 18.5 : mode === '2d' ? 16 : 17,
-        duration: 800,
-      });
-      document.getElementById('btn-2d').classList.toggle('active', mode === '2d');
-      document.getElementById('btn-3d').classList.toggle('active', mode === '3d');
-      document.getElementById('btn-fpv').classList.toggle('active', mode === 'fpv');
-      document.getElementById('fpv-hint').style.display = isFPV ? 'block' : 'none';
-
-      const show3D = mode !== '2d';
-      ['zones-extrusion', 'rooms-extrusion'].forEach(id => {
-        if (map.getLayer(id))
-          map.setLayoutProperty(id, 'visibility', show3D ? 'visible' : 'none');
-      });
-    }
-
-    // ── FPV movement ──────────────────────────────────────────────────────────
-    function setupFPV() {
-      window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
-      window.addEventListener('keyup',   e => { keys[e.key.toLowerCase()] = false; });
-      (function animate() {
-        if (isFPV) {
-          const rad  = (map.getBearing() * Math.PI) / 180;
-          const step = 0.000008;
-          let { lng, lat } = map.getCenter();
-          if (keys['w']) { lng += step * Math.sin(rad); lat += step * Math.cos(rad); }
-          if (keys['s']) { lng -= step * Math.sin(rad); lat -= step * Math.cos(rad); }
-          if (keys['a']) { lng -= step * Math.cos(rad); lat += step * Math.sin(rad); }
-          if (keys['d']) { lng += step * Math.cos(rad); lat -= step * Math.sin(rad); }
-          if (keys['w'] || keys['s'] || keys['a'] || keys['d']) map.setCenter([lng, lat]);
-        }
-        requestAnimationFrame(animate);
-      })();
-    }
-
-    // ── Tooltip ───────────────────────────────────────────────────────────────
-    function setupTooltip() {
-      const tip = document.getElementById('tooltip');
-      map.on('mousemove', 'rooms-extrusion', e => {
-        const p = e.features[0]?.properties;
-        if (!p) return;
-        tip.style.display = 'block';
-        tip.style.left = (e.point.x + 14) + 'px';
-        tip.style.top  = (e.point.y - 10) + 'px';
-        tip.innerHTML  = `<strong>${p.name}</strong>${p.area_sqm.toFixed(1)} m² · Floor ${p.floor}<br><span style="color:rgba(255,255,255,.5)">${p.shape}</span>`;
-        map.getCanvas().style.cursor = 'pointer';
-      });
-      map.on('mouseleave', 'rooms-extrusion', () => {
-        tip.style.display = 'none';
-        map.getCanvas().style.cursor = '';
-      });
-      // also for 2D fill
-      map.on('mousemove', 'rooms-fill', e => {
-        const p = e.features[0]?.properties;
-        if (!p) return;
-        tip.style.display = 'block';
-        tip.style.left = (e.point.x + 14) + 'px';
-        tip.style.top  = (e.point.y - 10) + 'px';
-        tip.innerHTML  = `<strong>${p.name}</strong>${p.area_sqm.toFixed(1)} m² · Floor ${p.floor}`;
-        map.getCanvas().style.cursor = 'pointer';
-      });
-      map.on('mouseleave', 'rooms-fill', () => {
-        tip.style.display = 'none';
-        map.getCanvas().style.cursor = '';
-      });
-    }
-
-    // ── Main init ─────────────────────────────────────────────────────────────
-    function initViewer() {
+  if (isCAD) {
+    mountCADViewer();
+  } else {
+    mountMap(mode === 'map3d' ? 62 : 0);
+    if (mapLoaded) {
+      mapInstance?.easeTo({ pitch: mode === 'map3d' ? 62 : 0, bearing: mode === 'map3d' ? -20 : 0, duration: 700 });
       try {
-        const rawPlan     = localStorage.getItem('generatedSitePlan');
-        const rawInterior = localStorage.getItem('interiorFloorPlan');
+        mapInstance?.setLayoutProperty('zones-3d', 'visibility', mode === 'map3d' ? 'visible' : 'none');
+      } catch {}
+    }
+  }
+}
 
-        if (!rawPlan) return setLoadingError('No layout found. Generate and select a layout first.');
-        const plan     = JSON.parse(rawPlan);
-        const interior = rawInterior ? JSON.parse(rawInterior) : null;
+// ── DXF Export ────────────────────────────────────────────────────────────────
+async function handleExport() {
+  exportBtn.disabled   = true;
+  exportBtn.innerHTML  = '<span>⏳</span> Exporting…';
+  try {
+    await exportDXF(sitePlan, interior, agEnabled);
+    exportBtn.innerHTML = '✔ Downloaded!';
+    setTimeout(() => { exportBtn.disabled=false; exportBtn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export DXF'; }, 3000);
+  } catch (err) {
+    exportBtn.innerHTML = '✗ Failed';
+    exportBtn.disabled  = false;
+    setTimeout(() => { exportBtn.innerHTML='Export DXF'; }, 3000);
+    console.error('[viewer] DXF export error:', err);
+  }
+}
 
-        const zoneFeatures = plan?.zones?.features;
-        if (!Array.isArray(zoneFeatures) || !zoneFeatures.length)
-          return setLoadingError('Layout data is empty. Regenerate a layout from Plot Details.');
+// ── Resize handler ────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  if (cadMounted && cadDisplay && currentMode === 'cad') {
+    try { cadDisplay.viewer.resize(); } catch {}
+  }
+  if (mapLoaded && mapInstance) mapInstance.resize();
+});
 
-        numFloors = plan.num_floors || 1;
+// ── BBMP Compliance fetch ────────────────────────────────────────────────────
+function chip(id, ok, label) {
+  const el = document.getElementById(id);
+  el.className = 'chip ' + (ok ? 'ok' : 'bad');
+  el.textContent = label;
+}
+async function fetchCompliance() {
+  if (!sitePlan?.zones?.features?.length) return;
+  try {
+    const polygon = sitePlan.selectedPlot
+      ? { type: 'Polygon', coordinates: [sitePlan.selectedPlot.coordinates || []] }
+      : sitePlan.zones.features[0]?.geometry;
+    if (!polygon) return;
 
-        // Prepare zone features with height
-        const prepared = zoneFeatures.map(f => {
-          const zone   = f.properties?.zone || 'zone';
-          const floors = Number(f.properties?.num_floors || numFloors || 1);
-          return {
-            ...f,
-            properties: {
-              ...f.properties,
-              zone,
-              color:  f.properties?.color || colorForZone(zone),
-              height: zone === 'building' ? Math.max(3, floors * FLOOR_H) : 1.5,
-            }
-          };
-        });
-
-        // Prepare room features
-        const roomFeatures = buildRoomFeatures(interior);
-        const hasRooms = roomFeatures.length > 0;
-
-        map = new maplibregl.Map({
-          container: 'map',
-          style:     'https://demotiles.maplibre.org/style.json',
-          center:    centerFromFeatures(prepared),
-          zoom: 16, pitch: 0, bearing: 0,
-        });
-        map.addControl(new maplibregl.NavigationControl(), 'top-right');
-
-        map.on('load', () => {
-          // ── Zone (site plan) layers ──────────────────────────────────────
-          map.addSource('zones', {
-            type: 'geojson',
-            data: { type: 'FeatureCollection', features: prepared }
-          });
-          map.addLayer({
-            id: 'zones-fill', type: 'fill', source: 'zones',
-            paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.25 }
-          });
-          map.addLayer({
-            id: 'zones-line', type: 'line', source: 'zones',
-            paint: { 'line-color': ['get', 'color'], 'line-width': 1.3, 'line-opacity': 0.85 }
-          });
-          map.addLayer({
-            id: 'zones-extrusion', type: 'fill-extrusion', source: 'zones',
-            layout: { visibility: 'none' },
-            paint: {
-              'fill-extrusion-color':   ['get', 'color'],
-              'fill-extrusion-height':  ['get', 'height'],
-              'fill-extrusion-base':    0,
-              'fill-extrusion-opacity': hasRooms ? 0.12 : 0.88,
-            }
-          });
-
-          // ── Room layers (if interior plan exists) ────────────────────────
-          if (hasRooms) {
-            map.addSource('rooms', {
-              type: 'geojson',
-              data: { type: 'FeatureCollection', features: roomFeatures }
-            });
-            map.addLayer({
-              id: 'rooms-fill', type: 'fill', source: 'rooms',
-              layout: { visibility: 'visible' },
-              paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.82 }
-            });
-            map.addLayer({
-              id: 'rooms-line', type: 'line', source: 'rooms',
-              layout: { visibility: 'visible' },
-              paint: { 'line-color': '#ffffff', 'line-width': 1.2, 'line-opacity': 0.6 }
-            });
-            map.addLayer({
-              id: 'rooms-extrusion', type: 'fill-extrusion', source: 'rooms',
-              layout: { visibility: 'none' },
-              paint: {
-                'fill-extrusion-color':   ['get', 'color'],
-                'fill-extrusion-height':  ['get', 'height'],
-                'fill-extrusion-base':    ['get', 'base'],
-                'fill-extrusion-opacity': 0.95,
-              }
-            });
-
-            buildFloorPicker(interior.floors.length);
-            buildLegend(interior);
-            setupTooltip();
-            applyFloorFilter();
-          }
-
-          // ── Layer toggles ────────────────────────────────────────────────
-          addLayerToggle('Zone Boundaries', 'zones-line',
-            v => map.setLayoutProperty('zones-line', 'visibility', v ? 'visible' : 'none'));
-          addLayerToggle('Zone Footprints', 'zones-fill',
-            v => map.setLayoutProperty('zones-fill', 'visibility', v ? 'visible' : 'none'));
-          addLayerToggle('Building Shell (3D)', 'zones-extrusion',
-            v => map.setLayoutProperty('zones-extrusion', 'visibility', v ? 'visible' : 'none'), false);
-
-          if (hasRooms) {
-            addLayerToggle('Room Footprints', 'rooms-fill',
-              v => { map.setLayoutProperty('rooms-fill', 'visibility', v ? 'visible' : 'none');
-                     map.setLayoutProperty('rooms-line', 'visibility', v ? 'visible' : 'none'); });
-            addLayerToggle('Room Volumes (3D)', 'rooms-extrusion',
-              v => map.setLayoutProperty('rooms-extrusion', 'visibility', v ? 'visible' : 'none'), false);
-          }
-
-          // ── View mode buttons ────────────────────────────────────────────
-          document.getElementById('btn-2d').addEventListener('click', () => apply3DMode('2d'));
-          document.getElementById('btn-3d').addEventListener('click', () => {
-            apply3DMode('3d');
-          });
-          document.getElementById('btn-fpv').addEventListener('click', () => {
-            apply3DMode('fpv');
-          });
-
-          setupFPV();
-          loadingEl.style.display = 'none';
-        });
-
-      } catch (err) {
-        console.error('Viewer Init Error:', err);
-        setLoadingError(`Error: ${err.message}`);
-      }
+    // Clearance check
+    const clRes = await fetch('/api/clearance', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ polygon, point: [0,0] }),
+    });
+    if (clRes.ok) {
+      const cl = await clRes.json();
+      document.getElementById('val-drain').textContent  = cl.drainageOffset?.toFixed(1);
+      document.getElementById('val-water').textContent  = cl.waterMainOffset?.toFixed(1);
+      document.getElementById('val-sewage').textContent = cl.sewageTrunkOffset?.toFixed(1);
+      chip('chip-infra', cl.isSelectable, cl.isSelectable ? '✓ Infra OK' : '✗ Infra conflict');
     }
 
-    document.addEventListener('DOMContentLoaded', initViewer);
-    setTimeout(() => {
-      if (loadingEl.style.display !== 'none' && loadingEl.textContent === 'Loading Geometry Engine…')
-        setLoadingError('Viewer init timed out. Go back, select a layout, then reopen viewer.');
-    }, 9000);
-  </script>
+    // Compliance check
+    const split = sitePlan.split || { building:60, greenery:20, parking:10, utility:10 };
+    const floors = interior?.floors?.length || sitePlan.num_floors || 3;
+    const comRes = await fetch('/api/compliance', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        polygon, prefs: split, zone: 'R1', infra_offsets: {}, floors
+      }),
+    });
+    if (comRes.ok) {
+      const com = await comRes.json();
+      chip('chip-fsi', com.fsi_ok,    `FSI ${com.computed_fsi}/${com.max_fsi}`);
+      chip('chip-ht',  com.height_ok, `Ht ${(floors*3.2).toFixed(1)}m ≤ ${com.height_ok ? '✓' : '✗'}`);
+      document.getElementById('compliance-strip').classList.add('show');
+      document.getElementById('cad-root').classList.add('with-strip');
+    }
+  } catch (e) { console.warn('[viewer] Compliance fetch failed:', e); }
+}
+
+// ── Anti-Gravity toggle ────────────────────────────────────────────────────
+function toggleAG() {
+  agEnabled = !agEnabled;
+  const btn = document.getElementById('btn-ag');
+  btn.classList.toggle('active', agEnabled);
+  btn.title = agEnabled ? 'AG BIM Core: ON — click to disable' : 'Toggle Anti-Gravity BIM Core';
+
+  // Remount viewer with new flag (reset state)
+  if (cadMounted) {
+    cadMounted = false;
+    cadDisplay = null;
+    cadViewer  = null;
+    cadRoot.innerHTML = '';
+    mountCADViewer();
+  }
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  if (!loadData()) return;
+
+  // Wire buttons
+  document.querySelectorAll('.vtab').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  exportBtn.addEventListener('click', handleExport);
+  document.getElementById('btn-ag').addEventListener('click', toggleAG);
+
+  // Start in CAD mode + fetch compliance data
+  setMode('cad');
+  fetchCompliance();
+
+  // Timeout guard
+  setTimeout(() => {
+    if (!loadingEl.classList.contains('fade-out')) {
+      setStatus('Timeout — check console', '');
+      loadingEl.classList.add('fade-out');
+    }
+  }, 15000);
+});
+</script>
+
 </body>
 </html>

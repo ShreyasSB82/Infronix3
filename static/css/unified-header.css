@@ -1,0 +1,59 @@
+
+.infronix-unified-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: rgba(8, 10, 16, 0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    padding: 0 2rem;
+    z-index: 10000;
+    font-family: 'Inter', system-ui, sans-serif;
+}
+
+.infronix-logo {
+    color: #fff;
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    margin-right: 2rem;
+    text-decoration: none;
+}
+
+.infronix-tagline {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.85rem;
+    font-style: italic;
+    flex: 1;
+}
+
+.infronix-nav {
+    display: flex;
+    gap: 1.5rem;
+}
+
+.infronix-nav-link {
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.infronix-nav-link:hover {
+    color: #2db2ff;
+}
+
+.infronix-nav-link.active {
+    color: #fff;
+    border-bottom: 2px solid #2db2ff;
+}
+
+/* Adjust layout containers to accommodate the fixed header */
+body {
+    padding-top: 60px;
+}

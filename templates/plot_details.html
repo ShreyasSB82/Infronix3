@@ -6,7 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Plot Details — UrbanScribe</title>
     <link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" />
-    <style>
+    <link rel="stylesheet" href="/static/css/unified-header.css">
+  <script src="/static/js/unified-header.js?v=20260408" defer></script>
+  <style>
         * {
             margin: 0;
             padding: 0;
@@ -254,9 +256,24 @@
             </div>
 
             <button id="generate-btn">Generate Plan</button>
-            <button id="viewer-btn">Open 3D Viewer</button>
+            <button id="viewer-btn">Map View (2D/3D)</button>
+            <button id="arch-viewer-btn" style="display:none; width: 100%; padding: .65rem; border: none; border-radius: .5rem; background: #a78bfa; color: #fff; font-weight: 700; cursor: pointer; margin-top: 8px;">🏗 CAD 3D View</button>
             <button id="interior-btn">Interior Layout</button>
+            <button id="export-dxf-btn" style="display:none; width: 100%; padding: .65rem; border: 1px solid rgba(96,180,255,.3); border-radius: .5rem; background: rgba(96,180,255,.12); color: #9fd1ff; font-weight: 600; cursor: pointer; margin-top: 8px;">⬇ Export DXF</button>
+            <!-- Anti-Gravity BIM Toggle -->
+            <button id="ag-toggle-btn" style="display:none; width:100%; padding:.60rem; border:1px solid rgba(167,139,250,.35); border-radius:.5rem; background:rgba(167,139,250,.08); color:#c4b5fd; font-weight:700; cursor:pointer; margin-top:8px; font-size:.82rem; font-family:inherit;">🔮 Enable AG BIM Core</button>
             <div id="layout-options"></div>
+
+            <!-- BBMP Compliance card (shown after generation) -->
+            <div id="compliance-card" style="display:none; margin-top:12px; padding:10px 12px; border-radius:.5rem; border:1px solid rgba(255,255,255,.08); background:rgba(0,0,0,.2); font-size:.75rem;">
+              <div style="font-weight:700; color:rgba(255,255,255,.55); margin-bottom:8px; letter-spacing:.04em;">BBMP COMPLIANCE</div>
+              <div class="row"><span class="lbl">FSI</span><span id="pd-fsi" class="val">–</span></div>
+              <div class="row"><span class="lbl">Height</span><span id="pd-ht" class="val">–</span></div>
+              <div class="row"><span class="lbl">Infra OK</span><span id="pd-infra" class="val">–</span></div>
+              <div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,.06); color:rgba(255,255,255,.4); font-size:.68rem;">
+                💧 Drain <b id="pd-drain">–</b>m &nbsp; 🚰 Water <b id="pd-water">–</b>m &nbsp; 🚽 Sewage <b id="pd-sewage">–</b>m
+              </div>
+            </div>
 
             <div id="legend">
                 <div class="leg"><span class="dot" style="background:#4A90D9"></span>Building</div>
@@ -265,15 +282,21 @@
                 <div class="leg"><span class="dot" style="background:#c0692a"></span>Utility</div>
             </div>
         </aside>
+
+        <!-- CAD 3D Viewport (three-cad-viewer) -->
+        <div id="arch-3d-container" style="display:none; position: absolute; left: 0; top: 0; right: 380px; bottom: 0; z-index: 50; background: #0d0f1a;"></div>
     </div>
     <div id="toast"></div>
 
     <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
-    <script>
-        let map;
-        let selectedPlot = null;
-        let toastTimer;
-        let selectedGeneratedLayout = null;
+    <script src="/static/js/earcut.js"></script>
+    <script src="/static/js/three-cad-viewer.min.js"></script>
+    <script type="module">
+        import { initialiseCADViewer, exportDXF } from '/static/js/3d/cadViewerBridge.js?v=5';
+        let map, selectedPlot = null, toastTimer, selectedGeneratedLayout = null;
+        let isArchMode = false;
+        let cadDisplay = null, cadViewer = null, cadReady = false;
+        let agEnabled = false;   // AG BIM Core toggle
 
         function toast(msg) {
             const t = document.getElementById('toast');
@@ -303,14 +326,38 @@
             document.getElementById('generate-btn').disabled = total !== 100 || !selectedPlot;
         }
 
-        function addLayer(id, data, type, paint) {
+        function bindUIHandlers() {
+            ['s-building', 's-greenery', 's-parking', 's-utility'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', updateTotals);
+            });
+            document.getElementById('generate-btn')?.addEventListener('click', generatePlan);
+            document.getElementById('viewer-btn')?.addEventListener('click', () => {
+                window.location.href = '/viewer';
+            });
+            document.getElementById('arch-viewer-btn')?.addEventListener('click', toggleArchMode);
+            document.getElementById('interior-btn')?.addEventListener('click', () => {
+                window.location.href = '/interior-layout';
+            });
+            document.getElementById('export-dxf-btn')?.addEventListener('click', handleExportDXF);
+            document.getElementById('ag-toggle-btn')?.addEventListener('click', toggleAGBIM);
+            updateTotals();
+        }
+
+        function addLayer(id, data, type, paint, beforeId) {
             if (map.getLayer(id)) map.removeLayer(id);
             if (map.getSource(id)) map.removeSource(id);
             map.addSource(id, { type: 'geojson', data });
-            map.addLayer({ id, type, source: id, paint });
+
+            // Ensure plot boundary lines are always on top of fills
+            if (!beforeId && id.includes('fill')) {
+                if (map.getLayer('selected-plot-line')) beforeId = 'selected-plot-line';
+            }
+            map.addLayer({ id, type, source: id, paint }, beforeId);
         }
 
         function renderSelectedPlot() {
+            if (!selectedPlot?.coordinates?.length) return;
             const feature = {
                 type: 'Feature',
                 geometry: { type: 'Polygon', coordinates: [selectedPlot.coordinates.map(c => [c[1], c[0]])] },
@@ -323,6 +370,59 @@
                 b[2] = Math.max(b[2], c[0]); b[3] = Math.max(b[3], c[1]); return b;
             }, [Infinity, Infinity, -Infinity, -Infinity]);
             map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 70 });
+            if (selectedPlot.area) {
+                document.getElementById('plot-area').textContent = `${Number(selectedPlot.area).toFixed(1)} m²`;
+            }
+        }
+
+        async function resolveSelectedPlot() {
+            const params = new URLSearchParams(window.location.search);
+            const plotId = params.get('plot_id');
+            if (plotId) {
+                try {
+                    const res = await fetch('/api/plots');
+                    if (res.ok) {
+                        const plots = await res.json();
+                        const selected = (plots || []).find((p) => p.id === plotId);
+                        if (selected?.coordinates?.length) {
+                            localStorage.setItem('selectedPlot', JSON.stringify(selected));
+                            return selected;
+                        }
+                    }
+                } catch {}
+            }
+
+            const rawSelected = localStorage.getItem('selectedPlot');
+            if (rawSelected) {
+                try {
+                    const parsed = JSON.parse(rawSelected);
+                    if (parsed?.coordinates?.length) return parsed;
+                } catch {}
+            }
+
+            const rawGenerated = localStorage.getItem('generatedSitePlan');
+            if (rawGenerated) {
+                try {
+                    const generated = JSON.parse(rawGenerated);
+                    if (generated?.selectedPlot?.coordinates?.length) {
+                        localStorage.setItem('selectedPlot', JSON.stringify(generated.selectedPlot));
+                        return generated.selectedPlot;
+                    }
+                } catch {}
+            }
+
+            try {
+                const res = await fetch('/api/plots');
+                if (res.ok) {
+                    const plots = await res.json();
+                    if (Array.isArray(plots) && plots.length && plots[0]?.coordinates?.length) {
+                        localStorage.setItem('selectedPlot', JSON.stringify(plots[0]));
+                        return plots[0];
+                    }
+                }
+            } catch {}
+
+            return null;
         }
 
         async function generatePlan() {
@@ -350,9 +450,42 @@
                 document.getElementById('plot-area').textContent = data.plot_area_sqm.toFixed(1) + ' m²';
                 renderLayoutOptions(data.layouts || [], split, payload);
                 toast('3 layout options generated');
+
+                // Auto-preview the first layout immediately
+                if (data.layouts && data.layouts.length > 0) {
+                    previewLayout(data.layouts[0], split, payload);
+                }
             } catch (e) {
                 toast(e.message || 'Generation failed');
             }
+        }
+
+        function previewLayout(picked, split, payload) {
+            selectedGeneratedLayout = picked;
+            const fc = picked.zones;
+            addLayer('zones-fill', fc, 'fill', { 'fill-color': ['get', 'color'], 'fill-opacity': 0.44 });
+            addLayer('zones-line', fc, 'line', { 'line-color': '#ffffff', 'line-width': 1, 'line-opacity': 0.35 });
+            
+            localStorage.setItem('generatedSitePlan', JSON.stringify({
+                selectedPlot,
+                split,
+                road_facing: payload.road_facing,
+                num_floors: payload.num_floors,
+                stats: picked.stats,
+                zones: picked.zones,
+                layout_name: picked.name,
+            }));
+            
+            document.getElementById('viewer-btn').classList.add('show');
+            document.getElementById('interior-btn').classList.add('show');
+            document.getElementById('arch-viewer-btn').style.display = 'block';
+            document.getElementById('export-dxf-btn').style.display = 'block';
+            document.getElementById('ag-toggle-btn').style.display = 'block';
+            // Reset cad so it re-renders with the new layout next time
+            cadReady = false;
+            cadDisplay = null;
+            // Fetch BBMP compliance for this layout
+            fetchComplianceCard(split, payload.num_floors);
         }
 
         function renderLayoutOptions(layouts, split, payload) {
@@ -362,84 +495,179 @@
                 return;
             }
             wrap.innerHTML = layouts.map((l, i) => `
-    <div class="layout-option">
+    <div class="layout-option" id="opt-${i}">
       <h4>${l.name} Layout</h4>
       <div class="layout-meta">
         Building: ${(l.stats?.building_sqm || 0).toFixed(1)} m² ·
         Greenery: ${(l.stats?.greenery_sqm || 0).toFixed(1)} m² ·
         Parking: ${(l.stats?.parking_sqm || 0).toFixed(1)} m²
       </div>
-      <button class="pick-btn" data-i="${i}">Select This Layout</button>
+      <button class="pick-btn" data-i="${i}">Preview & Select</button>
     </div>
   `).join('');
             wrap.querySelectorAll('.pick-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const idx = +btn.dataset.i;
                     const picked = layouts[idx];
-                    selectedGeneratedLayout = picked;
-                    const fc = picked.zones;
-                    addLayer('zones-fill', fc, 'fill', { 'fill-color': ['get', 'color'], 'fill-opacity': 0.44 });
-                    addLayer('zones-line', fc, 'line', { 'line-color': '#ffffff', 'line-width': 1, 'line-opacity': 0.35 });
-                    localStorage.setItem('generatedSitePlan', JSON.stringify({
-                        selectedPlot,
-                        split,
-                        road_facing: payload.road_facing,
-                        num_floors: payload.num_floors,
-                        stats: picked.stats,
-                        zones: picked.zones,
-                        layout_name: picked.name,
-                    }));
-                    document.getElementById('viewer-btn').classList.add('show');
-                    document.getElementById('interior-btn').classList.add('show');
-                    toast(`${picked.name} layout selected`);
+                    previewLayout(picked, split, payload);
+                    toast(`${picked.name} layout previewed`);
+                    
+                    // Highlight selected option
+                    wrap.querySelectorAll('.layout-option').forEach(opt => opt.style.borderColor = 'rgba(255,255,255,.12)');
+                    document.getElementById(`opt-${idx}`).style.borderColor = '#60b4ff';
                 });
             });
         }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            map = new maplibregl.Map({
-                container: 'map',
-                style: {
-                    version: 8,
-                    sources: {},
-                    layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#0b1427' } }],
-                    glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
-                    sprite: 'https://demotiles.maplibre.org/styles/osm-bright-gl-style/sprite'
-                },
-                center: [78.9629, 20.5937],
-                zoom: 5,
-            });
+        function toggleArchMode() {
+            isArchMode = !isArchMode;
+            const container = document.getElementById('arch-3d-container');
+            const mapEl = document.getElementById('map');
+            const btn = document.getElementById('arch-viewer-btn');
 
-            map.on('load', () => {
-                map.addSource('base-dark', {
-                    type: 'raster',
-                    tiles: ['https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png'],
-                    tileSize: 256
-                });
-                map.addLayer({ id: 'base-dark-layer', type: 'raster', source: 'base-dark' });
+            if (isArchMode) {
+                container.style.display = 'block';
+                mapEl.style.display = 'none';
+                btn.textContent = '✕ Close CAD 3D';
+                initCADView();
+            } else {
+                container.style.display = 'none';
+                mapEl.style.display = 'block';
+                btn.textContent = '🏗 CAD 3D View';
+            }
+        }
 
-                const raw = localStorage.getItem('selectedPlot');
-                if (!raw) {
-                    toast('No selected plot found. Please select a plot first.');
-                    return;
+        function initCADView() {
+            if (cadReady) return;
+            const container = document.getElementById('arch-3d-container');
+            const rawPlan     = localStorage.getItem('generatedSitePlan');
+            const rawInterior = localStorage.getItem('interiorFloorPlan');
+            const sitePlan  = rawPlan     ? JSON.parse(rawPlan)     : null;
+            const interior  = rawInterior ? JSON.parse(rawInterior) : null;
+
+            if (!sitePlan && !interior) {
+                toast('No geometry data. Generate a plan first.');
+                return;
+            }
+            const result = initialiseCADViewer(container, sitePlan, interior, agEnabled);
+            if (result) {
+                ({ display: cadDisplay, viewer: cadViewer } = result);
+                cadReady = true;
+            }
+        }
+
+        function toggleAGBIM() {
+            agEnabled = !agEnabled;
+            const btn = document.getElementById('ag-toggle-btn');
+            if (agEnabled) {
+                btn.textContent = '🔮 AG BIM Core: ON — click to disable';
+                btn.style.background = '#7c3aed';
+                btn.style.borderColor = '#7c3aed';
+                btn.style.color = '#fff';
+            } else {
+                btn.textContent = '🔮 Enable AG BIM Core';
+                btn.style.background = 'rgba(167,139,250,.08)';
+                btn.style.borderColor = 'rgba(167,139,250,.35)';
+                btn.style.color = '#c4b5fd';
+            }
+            // Force viewer to remount with new AG state
+            if (isArchMode && cadReady) {
+                cadReady = false;
+                cadDisplay = null;
+                cadViewer  = null;
+                document.getElementById('arch-3d-container').innerHTML = '';
+                initCADView();
+            }
+            toast(agEnabled ? '🔮 Anti-Gravity BIM Core enabled' : 'AG Core disabled');
+        }
+
+        async function fetchComplianceCard(split, numFloors) {
+            if (!selectedPlot?.coordinates?.length) return;
+            try {
+                const polygon = {
+                    type: 'Polygon',
+                    coordinates: [selectedPlot.coordinates.map(c => [c[1], c[0]])]
+                };
+                const [clRes, comRes] = await Promise.all([
+                    fetch('/api/clearance', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ polygon, point:[0,0] }) }),
+                    fetch('/api/compliance', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ polygon, prefs: split, zone: 'R1', infra_offsets: {}, floors: numFloors }) }),
+                ]);
+                if (clRes.ok) {
+                    const cl = await clRes.json();
+                    document.getElementById('pd-drain').textContent  = cl.drainageOffset?.toFixed(1);
+                    document.getElementById('pd-water').textContent  = cl.waterMainOffset?.toFixed(1);
+                    document.getElementById('pd-sewage').textContent = cl.sewageTrunkOffset?.toFixed(1);
+                    document.getElementById('pd-infra').textContent  = cl.isSelectable ? '✓ OK' : '✗ Conflict';
+                    document.getElementById('pd-infra').style.color  = cl.isSelectable ? '#4ade80' : '#f87171';
                 }
-                selectedPlot = JSON.parse(raw);
-                document.getElementById('plot-name').textContent = selectedPlot.name || 'Selected Plot';
-                renderSelectedPlot();
-                updateTotals();
-            });
+                if (comRes.ok) {
+                    const com = await comRes.json();
+                    document.getElementById('pd-fsi').textContent = `${com.computed_fsi} / ${com.max_fsi} ${com.fsi_ok ? '✓' : '✗'}`;
+                    document.getElementById('pd-fsi').style.color  = com.fsi_ok ? '#4ade80' : '#f87171';
+                    document.getElementById('pd-ht').textContent  = `${(numFloors * 3.2).toFixed(1)}m ≤ ${com.height_ok ? '✓' : '✗'}`;
+                    document.getElementById('pd-ht').style.color   = com.height_ok ? '#4ade80' : '#f87171';
+                }
+                document.getElementById('compliance-card').style.display = 'block';
+            } catch (e) { console.warn('[plot-details] Compliance fetch failed:', e); }
+        }
 
-            ['s-building', 's-greenery', 's-parking', 's-utility'].forEach(id => {
-                document.getElementById(id).addEventListener('input', updateTotals);
-            });
-            document.getElementById('generate-btn').addEventListener('click', generatePlan);
-            document.getElementById('viewer-btn').addEventListener('click', () => {
-                window.location.href = '/viewer';
-            });
-            document.getElementById('interior-btn').addEventListener('click', () => {
-                window.location.href = '/interior-layout';
-            });
-            updateTotals();
+        async function handleExportDXF() {
+            const btn = document.getElementById('export-dxf-btn');
+            btn.textContent = '⏳ Exporting...';
+            btn.disabled = true;
+            try {
+                const rawPlan     = localStorage.getItem('generatedSitePlan');
+                const rawInterior = localStorage.getItem('interiorFloorPlan');
+                const sitePlan  = rawPlan     ? JSON.parse(rawPlan)     : null;
+                const interior  = rawInterior ? JSON.parse(rawInterior) : null;
+                await exportDXF(sitePlan, interior, agEnabled);
+                btn.textContent = '✔ Downloaded!';
+                setTimeout(() => { btn.disabled = false; btn.textContent = '⬇ Export DXF'; }, 3000);
+            } catch (err) {
+                btn.textContent = '✗ Export Failed';
+                btn.disabled = false;
+                setTimeout(() => { btn.textContent = '⬇ Export DXF'; }, 3000);
+                toast('DXF export failed. Check console.');
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                selectedPlot = await resolveSelectedPlot();
+                if (selectedPlot) {
+                    document.getElementById('plot-name').textContent = selectedPlot.name || 'Selected Plot';
+                } else {
+                    toast('No plot found. Create/select a plot from LandMark first.');
+                }
+            } catch {
+                toast('Failed to load plot data.');
+            }
+
+            bindUIHandlers();
+
+            try {
+                if (!window.maplibregl) throw new Error('Maplibre failed to load');
+                map = new maplibregl.Map({
+                    container: 'map',
+                    style: 'https://demotiles.maplibre.org/style.json',
+                    center: [78.9629, 20.5937],
+                    zoom: 5,
+                });
+
+                map.on('load', () => {
+                    if (selectedPlot?.coordinates?.length) {
+                        renderSelectedPlot();
+                    }
+                    updateTotals();
+                });
+                map.on('error', () => {
+                    toast('Map load issue. You can still generate a plan.');
+                });
+            } catch (err) {
+                console.error('Map init failed:', err);
+                toast('Map failed to initialize. You can still generate a plan.');
+                document.getElementById('map').style.background = '#0b1427';
+            }
         });
     </script>
 </body>

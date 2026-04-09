@@ -1,10 +1,26 @@
-fastapi
-uvicorn[standard]
-httpx
-python-dotenv
-shapely
-pyproj
-numpy
-ezdxf
-pydantic
-jinja2
+# Infranix2 Python dependencies
+# Generated 2026-04-09 — all packages tested together
+
+# Web framework
+fastapi==0.135.3
+uvicorn[standard]==0.44.0
+
+# Data validation
+pydantic==2.11.7
+
+# HTTP client (for internal service calls)
+httpx==0.28.1
+
+# Templating
+jinja2==3.1.6
+
+# Environment variables
+python-dotenv==1.1.0
+
+# Geospatial / geometry
+shapely==2.1.2
+pyproj==3.7.2
+numpy==2.4.4
+
+# CAD / DXF export
+ezdxf==1.4.3

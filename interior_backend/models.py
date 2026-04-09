@@ -23,6 +23,9 @@ class RoomData(BaseModel):
 class FloorData(BaseModel):
     floor: int
     rooms: List[RoomData]
+    doors: List[Dict[str, Any]] = []
+    windows: List[Dict[str, Any]] = []
+    boundary: Optional[List[List[float]]] = None
     svg: str
 
 

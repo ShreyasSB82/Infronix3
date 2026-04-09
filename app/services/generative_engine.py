@@ -46,6 +46,8 @@ from shapely.geometry import (
 )
 from shapely.ops import transform as shapely_transform, unary_union
 
+from interior_backend.floorplan_engine import generate_floor_plan
+
 
 # ─── CRS helpers ──────────────────────────────────────────────────────────────
 
@@ -851,6 +853,20 @@ def generate_multiple_layouts(
                     continue
                 feat = _make_feature(p, zone, utm, extra)
                 if feat:
+                    # ─── Enrich Building Footprint with Interior ──────────────────
+                    if zone == "building":
+                        try:
+                            feat["properties"]["interior"] = generate_floor_plan(
+                                building_geojson=feat["geometry"],
+                                num_floors=cons.num_floors,
+                                bedrooms=max(1, int(p.area / 40.0)),
+                                bathrooms=max(1, int(p.area / 80.0)),
+                                has_study=p.area > 120.0,
+                                style="modern"
+                            )
+                        except Exception as e:
+                            print(f"FAILED to auto-generate interior: {e}")
+                    
                     geo_features.append(feat)
                     if zone != "setback":
                         zone_areas[zone] = zone_areas.get(zone, 0.0) + p.area
